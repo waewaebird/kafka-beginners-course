@@ -4,6 +4,19 @@
 컨슈머 그룹
 
 
+
+- wsl2 및 Ubuntu 설치
+
+- Java JDK 11 설치
+
+- Kafka 바이너리 설치
+
+- 
+
+
+
+
+
 PATH="$PATH:~/home/jzangeva/kafka_2.13-3.1.0/bin"
 
 kafka-server-start.sh config/server.properties
@@ -26,3 +39,4 @@ kafka-topics.sh --bootstrap-server localhost:9092 --topic first_topic --describe
 Topic: first_topic      TopicId: VrD9Nb5tRU66N-HEphLHLQ PartitionCount: 1       ReplicationFactor: 1    Configs: segment.bytes=1073741824
 Topic: first_topic      Partition: 0    Leader: 0       Replicas: 0     Isr: 0
 -파티션 0개          리더, 레플리카, Isr 브로커 ID:0
+
