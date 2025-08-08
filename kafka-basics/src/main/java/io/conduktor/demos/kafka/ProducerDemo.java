@@ -11,13 +11,13 @@ import java.util.Properties;
 public class ProducerDemo {
     private static final Logger log = LoggerFactory.getLogger(ProducerDemo.class.getSimpleName());
     public static void main(String[] args) {
-        log.info("hello world");
+        log.info("I am a Kafka Producer!");
 
         // create Producer Properties
         Properties properties = new Properties();
 
         // connect to Localhost
-        properties.setProperty("bootstrap.servers", "127.0.0.1:9092");
+        properties.setProperty("bootstrap.servers", "172.21.132.209:9092");
 
         // connect to Conduktor Playground
         //properties.setProperty("bootstrap.servers", "");
@@ -33,7 +33,7 @@ public class ProducerDemo {
         KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
 
         // create a Producer Record
-        ProducerRecord<String, String> producerRecord = new ProducerRecord<>("demo_java", "hello word");
+        ProducerRecord<String, String> producerRecord = new ProducerRecord<>("demo_java", "and next!");
 
         // send Data
         producer.send(producerRecord);

@@ -27,8 +27,8 @@ kafka-server-start.sh config/server.properties
 1. zookeeper-server-start.sh config/zookeeper.properties
 - 주키퍼 먼저 실행, 경로 알맞게 가야 함
 
-2. kafka-server-start.sh ./config/server.properties
-- 카프카 서버 실행
+2. kafka-server-start.sh .kafka_2.13-3.1.0/config/server.properties
+- 카프카 서버 실행 (브로커)
 
 3. kafka-topics.sh --bootstrap-server localhost:9092 --topic first_topic --create
 - bootstrap-server 브로커서버에서 first_topic 생성
