@@ -2,6 +2,7 @@ package io.conduktor.demos.kafka.wikimedia;
 
 import com.launchdarkly.eventsource.EventHandler;
 import com.launchdarkly.eventsource.EventSource;
+import okhttp3.Headers;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -38,10 +39,12 @@ public class WikimediaChangesProducer {
         KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
 
         String topics = "wikimedia.recentchange";
+        String UA = "WikimediaChangeStreamer/1.0 (contact: you@example.com)";
 
         EventHandler eventHandler = new WikimediaChangeHandler(producer, topics);
         String url = "https://stream.wikimedia.org/v2/stream/recentchange";
-        EventSource.Builder builder = new EventSource.Builder(eventHandler, URI.create(url));
+        EventSource.Builder builder = new EventSource.Builder(eventHandler, URI.create(url)).headers(Headers.of(
+                "User-Agent", UA, "API-User-Agent", UA));
         EventSource eventSource = builder.build();
 
         //start the producer in another thread

@@ -1,15 +1,20 @@
 package io.conduktor.demos.kafka.opensearch;
 
+import com.google.gson.JsonParser;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.RequestOptions;
@@ -22,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Collections;
@@ -65,7 +71,7 @@ public class OpenSearchConsumer {
         Properties properties = new Properties();
 
         // connect to Localhost
-        properties.setProperty("bootstrap.servers", "172.21.132.209:9092");
+        //properties.setProperty("bootstrap.servers", "172.21.132.209:9092");
 
         String groupId = "consumer-opensearch-demo";
 
@@ -76,14 +82,29 @@ public class OpenSearchConsumer {
         //properties.setProperty("sasl.mechanism", "PLAIN");
 
         // create consumer configs
-        properties.setProperty("key.deserializer", StringDeserializer.class.getName());
-        properties.setProperty("value.deserializer", StringDeserializer.class.getName());
-        properties.setProperty("group.id",groupId);
-        properties.setProperty("auto.offset.reset", "latest"); // from beginning
+        //properties.setProperty("key.deserializer", StringDeserializer.class.getName());
+        //properties.setProperty("value.deserializer", StringDeserializer.class.getName());
+        //properties.setProperty("group.id",groupId);
+        //properties.setProperty("auto.offset.reset", "latest"); // from beginning
+        properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "172.21.132.209:9092");
+        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         return new KafkaConsumer<>(properties);
     }
 
+    private static String extractId(String json) {
+        //
+        return JsonParser.parseString(json)
+                .getAsJsonObject()
+                .get("meta")
+                .getAsJsonObject()
+                .get("id")
+                .getAsString();
+    }
 
     public static void main(String[] args) throws IOException {
 
@@ -117,30 +138,60 @@ public class OpenSearchConsumer {
                 int recordCount =records.count();
                 log.info("Received " + recordCount + " record(s)");
 
+                BulkRequest bulkRequest = new BulkRequest();
+
 
                 for(ConsumerRecord<String, String> record : records) {
                     //send the record into Opensearch
 
+                    // strategy 1
+                    // define on ID using kafka Record coordinates
+                    //String id = record.topic() + "_" + record.partition() + "_" + record.offset();
+
                     try {
-                        IndexRequest indexRequest = new IndexRequest("wikimedia").source(record.value(), XContentType.JSON);
+                        // strategy2
+                        // we extract the ID from the JSON value
 
-                        IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
+                        String id = extractId(record.value());
 
-                        log.info(response.getId());
+                        IndexRequest indexRequest = new IndexRequest("wikimedia").source(record.value(), XContentType.JSON).id(id);
+
+                        //IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
+
+                        bulkRequest.add(indexRequest);
+
+                        //log.info(response.getId());
                     } catch (Exception e) {
 
                     }
                 }
 
+                if(bulkRequest.numberOfActions() > 0) {
+                    BulkResponse bulkResponse = openSearchClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+                    log.info("Inserted " + bulkResponse.getItems().length + " record(s).");
+
+                    try {
+                        Thread.sleep(1000);
+                    }  catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+
+                    consumer.commitSync();
+                    log.info("Offsets have been committed");
+                }
+
             }
 
 
+
+        } catch (WakeupException e) {
+            log.info("Consumer is starting to shut down");
+        } catch (Exception e) {
+            log.error("Unexpected exception in the consumer", e);
+        } finally {
+            consumer.close(); // close the consumer, this will also commit offsets
+            openSearchClient.close();
+            log.info("the consumer is now gracefully shutdown");
         }
-
-
-
-        // main code logic
-
-        // close things
     }
 }
