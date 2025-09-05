@@ -90,7 +90,7 @@ public class OpenSearchConsumer {
         properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         return new KafkaConsumer<>(properties);
@@ -119,10 +119,10 @@ public class OpenSearchConsumer {
         // we need to create the index on openSearch if it doesn't exist already
         try(openSearchClient; consumer) {
 
-            boolean indexExists = openSearchClient.indices().exists(new GetIndexRequest("wikimedia"), RequestOptions.DEFAULT);
+            boolean indexExists = openSearchClient.indices().exists(new GetIndexRequest("wikimedia2"), RequestOptions.DEFAULT);
 
             if(!indexExists) {
-                CreateIndexRequest createIndexRequest = new CreateIndexRequest("wikimedia");
+                CreateIndexRequest createIndexRequest = new CreateIndexRequest("wikimedia2");
                 openSearchClient.indices().create(createIndexRequest, RequestOptions.DEFAULT);
                 log.info("The wikimedia Index has been created");
             } else {
@@ -154,7 +154,7 @@ public class OpenSearchConsumer {
 
                         String id = extractId(record.value());
 
-                        IndexRequest indexRequest = new IndexRequest("wikimedia").source(record.value(), XContentType.JSON).id(id);
+                        IndexRequest indexRequest = new IndexRequest("wikimedia2").source(record.value(), XContentType.JSON).id(id);
 
                         //IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
 
