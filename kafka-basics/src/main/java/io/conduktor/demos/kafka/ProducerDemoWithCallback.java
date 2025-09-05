@@ -39,7 +39,16 @@ public class ProducerDemoWithCallback {
 
         for (int j = 0; j < 10; j++) {
             for (int i = 0; i < 30; i++) {
-                ProducerRecord<String, String> producerRecord = new ProducerRecord<>("demo_java", "hello world" + i);
+                /* With Key start */
+                String topic = "demo_java";
+                String key = "id_" + i;
+                String value = "Hello World " + i;
+                ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, key, value);
+                /* With Key end */
+
+                //ProducerRecord<String, String> producerRecord = new ProducerRecord<>("demo_java", "hello world" + i);
+
+
                 // send Data
                 producer.send(producerRecord, new Callback() {
                     @Override
