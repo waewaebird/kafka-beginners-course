@@ -47,4 +47,6 @@ Topic: first_topic      Partition: 0    Leader: 0       Replicas: 0     Isr: 0
 
 
 OpenSearch 명령어
-GET _cat/indices : 현재 저장된 모든 인덱스(테이블 같은 개념)를 확인하는 방법 
+GET _cat/indices : 현재 저장된 모든 인덱스(테이블 같은 개념)를 확인하는 방법
+
+https://cnr.sh/posts/2017-08-29-how-paint-bike-shed-kafka-topic-naming-conventions/ : 토픽 네이밍
