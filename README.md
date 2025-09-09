@@ -50,3 +50,21 @@ OpenSearch 명령어
 GET _cat/indices : 현재 저장된 모든 인덱스(테이블 같은 개념)를 확인하는 방법
 
 https://cnr.sh/posts/2017-08-29-how-paint-bike-shed-kafka-topic-naming-conventions/ : 토픽 네이밍
+
+
+
+Get Taxi
+        
+userApp -> User Position Service(Producer) =>  user_position Topic-|  ->    Surge Pricing
+taxiApp -> Taxi Position Service(Producer) =>  taxi_position Topic-|  ->    computation Model (Kafka Streams)
+                                                                   |               |
+userAPP -> Taxi Cost Service(Consumer)      <= urge_pricing Topic -| <--------------        
+                                                                   |
+                                                                   ---------------------> Analytics Consumer (Kafka Connect) -------> Analytics Store(Amazon S3)
+
+
+My Social Media
+
+
+
+
