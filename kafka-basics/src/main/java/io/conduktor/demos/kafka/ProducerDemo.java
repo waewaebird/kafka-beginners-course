@@ -26,10 +26,11 @@ public class ProducerDemo {
         //properties.setProperty("sasl.mechanism", "PLAIN");
 
         // set producer properties
+        // Producer 데이터를 바이트로 직렬화
         properties.setProperty("key.serializer", StringSerializer.class.getName());
         properties.setProperty("value.serializer", StringSerializer.class.getName());
 
-        // create the Producer
+        // create the Producer <Key, Value>
         KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
 
         // create a Producer Record
