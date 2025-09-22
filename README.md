@@ -35,6 +35,11 @@ kafka-server-start.sh config/server.properties
   - zookeeper-server-stop.sh
   - kafka-server-stop.sh
 
+2-1. kafka-storage.sh random-uuid (Kraft모드 uuid생성)
+     kafka-storage.sh format -t C1QLgsyiTbizRlRHDXndsw -c ~/kafka_2.13-3.1.0/config/kraft/server.properties (생성된 uuid 입력, 포맷)
+     kafka-server-start.sh ~/kafka_2.13-3.1.0/config/kraft/server.properties (크래프트모드로 실행)
+     kafka-server-start.sh -daemon /kafka_2.13-3.1.0/config/kraft/server.properties
+
 3. kafka-topics.sh --bootstrap-server localhost:9092 --topic first_topic --create
 - bootstrap-server 브로커서버에서 first_topic 생성
 
@@ -64,6 +69,9 @@ userAPP -> Taxi Cost Service(Consumer)      <= urge_pricing Topic -| <----------
 
 
 My Social Media
+
+
+RedPanda 
 
 
 
