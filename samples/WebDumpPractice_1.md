@@ -15,14 +15,8 @@ ___
 D => Replicas are spread across available brokers, and each replica = one broker. RF 3 = 3 brokers
 </details>
 
-
-
-
-
-
-
-
-
+<br>
+<br>
 
 ## Question 2
 ___
@@ -41,14 +35,8 @@ A Zookeeper ensemble contains 5 servers. What is the maximum number of servers t
 C => majority consists of 3 zk nodes for 5 nodes zk cluster, so 2 can fail
 </details>
 
-
-
-
-
-
-
-
-
+<br>
+<br>
 
 ## Question 3
 ___
@@ -67,15 +55,8 @@ Select all the way for one consumer to subscribe simultaneously to the following
 A, D => Multiple topics can be passed as a list or regex pattern.
 </details>
 
-
-
-
-
-
-
-
-
-
+<br>
+<br>
 
 ## Question 4
 ___
@@ -92,14 +73,8 @@ Once sent to a topic, a message can be modified
 A => Kafka logs are append-only and the data is immutable
 </details>
 
-
-
-
-
-
-
-
-
+<br>
+<br>
 
 ## Question 5
 ___
@@ -118,14 +93,8 @@ Your topic is log compacted and you are sending a message with the key K and val
 A => Sending a message with the null value is called a tombstone in Kafka and will ensure the log compacted topic does not contain any messages with the key K upon compaction
 </details>
 
-
-
-
-
-
-
-
-
+<br>
+<br>
 
 ## Question 6
 ___
@@ -144,15 +113,8 @@ To produce data to a topic, a producer must provide the Kafka client with...
 D => All brokers can respond to a Metadata request, so a client can connect to any broker in the cluster and then figure out on its own which brokers to send data to.
 </details>
 
-
-
-
-
-
-
-
-
-
+<br>
+<br>
 
 ## Question 7
 ___
