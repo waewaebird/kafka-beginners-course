@@ -1,13 +1,14 @@
-Question 1 
-    If a topic has a replication factor of 3...
+## Question 1
+___
+ If a topic has a replication factor of 3...
 - [ ] A. 3 replicas of the same data will live on 1 broker
 - [ ] B. Each partition will live on 4 different brokers
 - [ ] C. Each partition will live on 2 different brokers
 - [ ] D. Each partition will live on 3 different brokers
 
 <details>
-<summary><strong>🎯 Answer :</strong></summary>
-D => Replicas are spread across available brokers, and each replica = one broker. RF 3 = 3 brokers
+    <summary><strong>🎯 Answer :</strong></summary>
+    D => Replicas are spread across available brokers, and each replica = one broker. RF 3 = 3 brokers
 </details>
 
 
