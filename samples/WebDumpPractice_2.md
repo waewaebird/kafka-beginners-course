@@ -1134,13 +1134,242 @@ Which change should you make?
 🎯 Answer :
 </strong>
 </summary>
-B => To increase consumerthroughput, one effective strategy is toincrease the amount of datafetched in each poll by raisingfetch.max.bytesormax.partition.fetch.bytes. This allows each poll to retrieve more records per request, improving processing efficiency.
+B => To increase consumer throughput, one effective strategy is to increase the amount of data fetched in each poll 
+by raising fetch.max.bytes or max.partition.fetch.bytes. This allows each poll to retrieve more records per request, improving processing efficiency.
 FromKafka Consumer Config Docs:
 "Increasing fetch size allows consumers to retrieve larger batches of messages, improving throughput and reducing request overhead."
 * Removing consumers (A) may reduce parallelism.
 * Manual commit (C) adds complexity, not throughput.
 * Decreasing session timeout (D) risks unnecessary rebalances.
 Reference:Kafka Consumer Configuration > fetch.max.bytes
+</details>
+
+<br>
+<br>
+
+## Question 51
+___
+You need to correctly join data from two Kafka topics. What will allow for the co-partitioning? (Choose 2.)
+- [ ] A. Both topics have the same retention time.
+- [ ] B. Both topics have the same value schema.
+- [ ] C. Both topics have the same key and partitioning strategy.
+- [ ] D. Both topics have the same number of partitions.
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+C , D => Co-partitioning -> 두 토픽에서 같은 키를 갖은 데이터가 같은 파티션 번호에 위치하도록 하는것? kafkaStreams에서 조인 연산을 위해 필요...
+                            같은 파티션 번호, 파티션 번호만 서로 공유 하니깐 파치션 수가 같고, 키가 같고, 키의 해싱전략이 같아야 함.
+</details>
+
+<br>
+<br>
+
+## Question 52
+___
+You are running a Kafka Streams application in a Docker container managed by Kubernetes, and upon application restart, 
+it takes a long time for the docker container to replicate the state and get back to processing the data. How can you improve dramatically the application restart?
+- [ ] A. Mount a persistent volume for your RocksDB
+- [ ] B. Increase the number of partitions in your inputs topic
+- [ ] C. Reduce the Streams caching property
+- [ ] D. Increase the number of Streams threads
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A => Although any Kafka Streams application is stateless as the state is stored in Kafka, it can take a while and lots of resources to recover the state from Kafka. 
+In order to speed up recovery, it is advised to store the Kafka Streams state on a persistent volume, so that only the missing part of the state needs to be recovered.
+</details>
+
+<br>
+<br>
+
+## Question 53
+___
+In Avro, adding a field to a record without default is a __ schema evolution
+- [ ] A. forward
+- [ ] B. backward
+- [ ] C. full
+- [ ] D. breaking
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A => Clients with old schema will be able to read records saved with new schema.
+</details>
+
+<br>
+<br>
+
+## Question 54
+___
+The exactly once guarantee in the Kafka Streams is for which flow of data?
+- [ ] A. Kafka => Kafka
+- [ ] B. Kafka => External
+- [ ] C. External => Kafka
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A => Kafka Streams can only guarantee exactly once processing if you have a Kafka to Kafka topology.
+</details>
+
+<br>
+<br>
+
+## Question 55
+___
+A customer has many consumer applications that process messages from a Kafka topic. 
+Each consumer application can only process 50 MB/s. Your customer wants to achieve a target throughput of 1 GB/s. 
+What is the minimum number of partitions will you suggest to the customer for that particular topic?
+- [ ] A. 10
+- [ ] B. 20
+- [ ] C. 1
+- [ ] D. 50
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+B => each consumer can process only 50 MB/s, so we need at least 20 consumers consuming one partition so that 50 * 20 = 1000 MB target is achieved.
+</details>
+
+<br>
+<br>
+
+## Question 56
+___
+By default, which replica will be elected as a partition leader? (select two)
+- [ ] A. Preferred leader broker if it is in-sync and auto.leader.rebalance.enable=true
+- [ ] B. Any of the replicas
+- [ ] C. Preferred leader broker if it is in-sync and auto.leader.rebalance.enable=false
+- [ ] D. An in-sync replica
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+D ??? B , D => Preferred leader is a broker that was leader when topic was created. 
+It is preferred because when partitions are first created, the leaders are balanced between brokers. Otherwise, any of the in-sync replicas (ISR) will be elected leader, as long as unclean.leader.election=false (by default)
+</details>
+
+<br>
+<br>
+
+## Question 57
+___
+You are building a system for a retail store selling products to customers.
+Which three datasets should you model as a GlobalKTable?
+(Select three.)
+- [ ] A. Inventory of products at a warehouse
+- [ ] B. All purchases at a retail store occurring in real time
+- [ ] C. Customer profile information
+- [ ] D. Log of payment transactions
+- [ ] E. Catalog of products
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A , C , E => AGlobalKTable is a replicated, read-only table available in full on all instances. It's best for reference or lookup datasets such as:
+* Product catalog
+* Customer profiles
+* Warehouse inventory
+FromKafka Streams Developer Guide:
+"Use GlobalKTable when you need to perform joins using non-partition-aligned reference data that's small enough to replicate."
+* Purchases and transactions are high-throughput, time-sensitive streams, not static reference data.
+Reference:Kafka Streams Concepts > GlobalKTable
+</details>
+
+<br>
+<br>
+
+## Question 58
+___
+In Kafka Streams, by what value are internal topics prefixed by?
+- [ ] A. tasks-<number>
+- [ ] B. application.id
+- [ ] C. group.id
+- [ ] D. kafka-streams-
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+B => In Kafka Streams, the application.id is also the underlying group.id for your consumers, and the prefix for all internal topics (repartition and state)
+</details>
+
+<br>
+<br>
+
+## Question 59
+___
+In Java, Avro SpecificRecords classes are
+- [ ] A. automatically generated from an Avro Schema
+- [ ] B. written manually by the programmer
+- [ ] C. automatically generated from an Avro Schema + a Maven / Gradle Plugin
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+C => SpecificRecord is created from generated record classes
+</details>
+
+<br>
+<br>
+
+## Question 60
+___
+How do you read a table or stream from the beginning of a topic?
+- [ ] A. automatically generated from an Avro Schema
+- [ ] B. written manually by the programmer
+- [ ] C. automatically generated from an Avro Schema + a Maven / Gradle Plugin
+- [ ] D. automatically generated from an Avro Schema + a Maven / Gradle Plugin
+- [ ] E. automatically generated from an Avro Schema + a Maven / Gradle Plugin
+- [ ] F. automatically generated from an Avro Schema + a Maven / Gradle Plugin
+- [ ] G. automatically generated from an Avro Schema + a Maven / Gradle Plugin
+- [ ] H. automatically generated from an Avro Schema + a Maven / Gradle Plugin
+
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+G => 
 </details>
 
 <br>
