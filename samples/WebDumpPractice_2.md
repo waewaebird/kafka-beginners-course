@@ -862,7 +862,7 @@ ___
 You need to configure a sink connector to write records that fail into a dead letter queue topic.
 Requirements:
 * Topic name: DLQ-Topic
-* Headers containing error context must be added to the messagesWhich three configuration parameters are necessary?(Select three.)
+* Headers containing error context must be added to the messages Which three configuration parameters are necessary?(Select three.)
 - [ ] A. errors.tolerance=all
 - [ ] B. errors.deadletterqueue.topic.name=DLQ-Topic
 - [ ] C. errors.deadletterqueue.context.headers.enable=true
@@ -878,7 +878,7 @@ Requirements:
 </strong>
 </summary>
 A , B , C => To send failed records to adead letter queue (DLQ), you must configure:
-* errors.tolerance=all: Tells the connector tonot failon errors but handle them (e.g., send to DLQ).
+* errors.tolerance=all: Tells the connector to not fail on errors but handle them (e.g., send to DLQ).
 * errors.deadletterqueue.topic.name=DLQ-Topic: Specifies the DLQ topic.
 * errors.deadletterqueue.context.headers.enable=true: Includes error context in message headers.
 FromKafka Connect Error Handling Docs:
