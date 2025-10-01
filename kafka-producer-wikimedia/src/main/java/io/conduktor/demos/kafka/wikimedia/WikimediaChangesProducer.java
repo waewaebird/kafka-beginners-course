@@ -50,7 +50,7 @@ public class WikimediaChangesProducer {
         //start the producer in another thread
         eventSource.start();
 
-        // we produce for 10 minutes and block the program until then
+        // we produce for 10 minutes and block the program until then / 메인스레드 종료 방지
         TimeUnit.MINUTES.sleep(10);
 
     }
