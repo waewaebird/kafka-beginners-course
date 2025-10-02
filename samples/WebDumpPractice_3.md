@@ -470,3 +470,466 @@ C , D => 위와 같은 co-partitioning 두 토픽 모두 같은 수의 파티션
 
 <br>
 <br>
+
+## Question 21
+___
+You are working on a Kafka cluster with three nodes. You create a topic named orders with:
+* replication.factor = 3
+* min.insync.replicas = 2
+* acks = allWhat exception will be generated if two brokers are down due to network delay?
+- [ ] A. NotEnoughReplicasException
+- [ ] B. NetworkException
+- [ ] C. NotCoordinatorException
+- [ ] D. NotLeaderForPartitionException
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A => With acks=all and min.insync.replicas=2, Kafka requiresat least two in-sync replicasto acknowledge a write.
+If onlyone broker is alive, the condition fails, andNotEnoughReplicasExceptionis thrown by the producer.
+FromKafka Producer Exception Docs:
+"NotEnoughReplicasException is thrown when the number of in-sync replicas is insufficient to satisfy acks=all with min.insync.replicas."
+* NetworkException is generic and not raised here.
+* NotCoordinatorException is related to consumer group coordination.
+* NotLeaderForPartitionException is unrelated unless accessing an unassigned leader.
+Reference:Kafka Producer Error Handling
+</details>
+
+<br>
+<br>
+
+## Question 22
+___
+An ecommerce wesbite sells some custom made goods. What's the natural way of modeling this data in Kafka streams?
+- [ ] A. Purchase as stream, Product as stream, Customer as stream
+- [ ] B. Purchase as stream, Product as table, Customer as table
+- [ ] C. Purchase as table, Product as table, Customer as table
+- [ ] D. Purchase as stream, Product as table, Customer as stream
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+B => Mostly-static data is modeled as a table whereas business transactions should be modeled as a stream.
+</details>
+
+<br>
+<br>
+
+## Question 23
+___
+When using plain JSON data with Connect, you see the following error messageorg.apache.kafka.connect.
+errors.DataExceptionJsonDeserializer with schemas.enable requires "schema" and "payload" fields and may not contain additional fields. How will you fix the error?
+- [ ] A. Set key.converter, value.converter to JsonConverter and the schema registry url
+- [ ] B. Use Single Message Transforms to add schema and payload fields in the message
+- [ ] C. Set key.converter.schemas.enable and value.converter.schemas.enable to false
+- [ ] D. Set key.converter, value.converter to AvroConverter and the schema registry url
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+C => You will need to set the schemas.enable parameters for the converter to false for plain text with no schema.
+</details>
+
+<br>
+<br>
+
+## Question 24
+___
+Your company has three Kafka clusters: Development, Testing, and Production.
+The Production cluster is running out of storage, so you add a new node.
+Which two statements about the new node are true?
+(Select two.)
+- [ ] A. A node ID will be assigned to the new node automatically.
+- [ ] B. A newly added node will have KRaft controller role by default.
+- [ ] C. A new node will not have any partitions assigned to it unless a new topic is created or reassignment occurs.
+- [ ] D. A new node can be added without stopping existing cluster nodes.
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+C , D => * C is true: When a new broker is added,no partitions are assigned to itunless you create new topics or reassign existing onesusing kafka-reassign-partitions.sh.
+* D is true: Kafka brokers arehot-pluggable; no need to stop the cluster when scaling.
+FromKafka Operations Guide:
+"A newly added broker won't be assigned partitions until reassignments or new topic creation."
+"Kafka allows dynamic scaling by adding brokers without downtime."
+* A is false: Broker IDs must be manually set unless using dynamic broker registration in KRaft mode.
+* B is false unless the cluster usesKRaft modeand the broker isspecifically assigneda controller role.
+Reference:Kafka Operations > Adding Brokers
+</details>
+
+<br>
+<br>
+
+## Question 25
+___
+You are building a system for a retail store to sell products to customers Which dataset should be modeled as a GlobatKTable? (Choose 3.)
+(Select two.)
+- [ ] A. Log of payment transactions
+- [ ] B. Catalog of products
+- [ ] C. Inventory of products at a warehouse e.g 100 items left
+- [ ] D. All purchases at a retail store occurring in real time
+- [ ] E. Customer profile information
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+B , C , E => GlobalKTable참조 테이터에 적합. 변경이 적고, 조회가 많은 데이터
+            kafka Streams API에는 KStream(이벤트 처리 : 주문 클릭 결제같은 이벤트), 
+                                 KTable(현재 상태를 저장 : 파티션별로 분산, 큰 상태 데이터) - 사용자 계정 정보, 집계 결과 - 큰 데이터, 같은 키 조인, 메모리 효율 (자주 바뀌는 것들 포인트, 장바구니 등)
+                                 GlobalKTable(현재 상태를 저장 : 참조 데이터) 상품 카탈로그, 고객 프로필, 환율 정도, 지역코드 등 - 작은 참조 데이터, 외래 키 조인, 편의성
+</details>
+
+<br>
+<br>
+
+## Question 26
+___
+The producer code below features a Callback class with a method called onCompletion().
+When will the onCompletion() method be invoked?
+- [ ] A. When a consumer sends an acknowledgement to the producer
+- [ ] B. When the producer puts the message into its socket buffer
+- [ ] C. When the producer batches the message
+- [ ] D. When the producer receives the acknowledgment from the broker
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+D => The onCompletion() method of Kafka'sCallback interfaceis executedonce the broker acknowledgesthe message. This includes success or failure, and it isinvoked asynchronouslyby the producer.
+FromKafka Java Client API Documentation:
+"The onCompletion method will be called when the record sent to the server has been acknowledged, or when an error occurs." This ensures thatthe record was sent and acknowledged, not just added to a batch or local buffer.
+Reference:Kafka Java Client API > org.apache.kafka.clients.producer.Callback
+</details>
+
+<br>
+<br>
+
+## Question 27
+___
+An application is writing AVRO messages using Schema Registry to topic t1. During this process, the Schema Registry becomes unavailable for a few seconds.
+What is the expected impact to the application?
+- [ ] A. Since messages are cached by the producer, the application will only get an error if the producer is sending the batch at that time.
+- [ ] B. The application may not have any impact, unless it is writing messages with a new Schema Definition.
+- [ ] C. All messages within that time will receive an error.
+- [ ] D. Since the broker will eventually replicate the message Schema, there will not be an error.
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+B => 스키마 레지스트리는 독립된 서버로 돌고있는데, 그게 멈췄을떄 프로듀서는 기존에 보내던 양식을 알고 있어서, 이전 양식 그대로 브로커에 전송함.
+</details>
+
+<br>
+<br>
+
+## Question 28
+___
+Which of the following is true regarding thread safety in the Java Kafka Clients?
+- [ ] A. One Producer can be safely used in multiple threads
+- [ ] B. One Consumer can be safely used in multiple threads
+- [ ] C. One Consumer needs to run in one thread
+- [ ] D. One Producer needs to be run in one thread
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A , C => KafkaConsumer is not thread-safe(인스턴스는 반드시 하나의 스레드에서 사용해야함.), KafkaProducer is thread safe.
+</details>
+
+<br>
+<br>
+
+## Question 29
+___
+What information isn't stored inside of Zookeeper? (select two)
+- [ ] A. Schema Registry schemas
+- [ ] B. Consumer offset
+- [ ] C. ACL inforomation
+- [ ] D. Controller registration
+- [ ] E. Broker registration info
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A , B => Consumer offsets are stored in a Kafka topic __consumer_offsets, and the Schema Registry stored schemas in the _schemas topic.
+</details>
+
+<br>
+<br>
+
+## Question 30
+___
+How do you create a topic named test with 3 partitions and 3 replicas using the Kafka CLI?
+- [ ] A. bin/kafka-topics.sh --create --broker-list localhost:9092 --replication-factor 3 --partitions 3 --topic test
+- [ ] B. bin/kafka-topics-create.sh --zookeeper localhost:9092 --replication-factor 3 --partitions 3 --topic test
+- [ ] C. bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 3 --partitions 3 --topic test
+- [ ] D. bin/kafka-topics.sh --create --bootstrap-server localhost:2181 --replication-factor 3 --partitions 3 --topic test
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+C => As of Kafka 2.3, the kafka-topics.sh command can take --bootstrap-server localhost:9092 as an argument.
+You could also use the (now deprecated) option of --zookeeper localhost:2181.
+</details>
+
+<br>
+<br>
+
+## Question 31
+___
+What is the protocol used by Kafka clients to securely connect to the Confluent REST Proxy?
+- [ ] A. Kerberos
+- [ ] B. SASL
+- [ ] C. HTTPS (SSL/TLS)
+- [ ] D. HTTP
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+C => Confluent REST Proxy는 HTTP/HTTPS를 통해 카프카 클라이언트가 Kafka브로커에 접근할 수 있게 해주는 RESTful API 서비스
+</details>
+
+<br>
+<br>
+
+## Question 32
+___
+How would you describe a connector in ksqlDB?
+- [ ] A. DESCRIBE ip_sum EXTENDED;
+- [ ] B. DROP CONNECTOR [IF EXISTS] connector_name;
+- [ ] C. DESCRIBE CONNECTOR connector_name;
+- [ ] D. DESCRIBE connector_name CONNECTOR;
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+C => 커넥터의 정보를 조회하는 구문 ex)DESCRIBE CONNECTOR jdbc_source_connector;
+</details>
+
+<br>
+<br>
+
+## Question 33
+___
+You are building a system for a retail store selling products to customers.
+Which three datasets should you model as a GlobalKTable?
+(Select three.)
+- [ ] A. Inventory of products at a warehouse
+- [ ] B. All purchases at a retail store occurring in real time
+- [ ] C. Customer profile information
+- [ ] D. Log of payment transactions
+- [ ] E. Catalog of products
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A , C , E => AGlobalKTableis a replicated, read-only table available in full on all instances. It's best forreference or lookup datasetssuch as:
+* Product catalog
+* Customer profiles
+* Warehouse inventory
+FromKafka Streams Developer Guide:
+"Use GlobalKTable when you need to perform joins using non-partition-aligned reference data that's small enough to replicate."
+* Purchases and transactions are high-throughput, time-sensitive streams, not static reference data.
+Reference:Kafka Streams Concepts > GlobalKTable
+</details>
+
+<br>
+<br>
+
+## Question 34
+___
+There are two consumers C1 and C2 belonging to the same group G subscribed to topics T1 and T2. Each of the topics has 3 partitions. How will the partitions be assigned to consumers with Partition Assigner being Round Robin Assigner?
+- [ ] A. C1 will be assigned partitions 0 and 2 from T1 and partition 1 from T2. C2 will have partition 1 from T1 and partitions 0 and 2 from T2.
+- [ ] B. Two consumers cannot read from two topics at the same time
+- [ ] C. C1 will be assigned partitions 0 and 1 from T1 and T2, C2 will be assigned partition 2 from T1 and T2.
+- [ ] D. All consumers will read from all partitions
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A => The correct option is the only one where the two consumers share an equal number of partitions amongst the two topics of three partitions. 
+An interesting article to read is https://medium.com/@anyili0928/what-i-have- learned-from-kafka-partition-assignment-strategy-799fdf15d3ab
+</details>
+
+<br>
+<br>
+
+## Question 35
+___
+The Controller is a broker that is... (select two)
+- [ ] A. elected by Zookeeper ensemble
+- [ ] B. is responsible for partition leader election
+- [ ] C. elected by broker majority
+- [ ] D. is responsible for consumer group rebalances
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+A , B => Controller is a broker that in addition to usual broker functions is responsible for partition leader election. 
+The election of that broker happens thanks to Zookeeper and at any time only one broker can be a controller
+브로커 중 하나로, 일반 브로커 약할 수행 + 파티션 리더 선출, 브로커 추가/제거 감지, isr관리, 메타데이터 변경사항 다른 브로커에게 전달 등등..
+zookeeper는 실제 선추ㄹ과정에서 조정자 역할 을 수행, 그러나 Kraft에서는 노드들이 kafka상호 합의 알고리즘을 통해 controller를 선출함
+</details>
+
+<br>
+<br>
+
+## Question 36
+___
+We want the average of all events in every five-minute window updated every minute. What kind of Kafka Streams window will be required on the stream?
+- [ ] A. Session window
+- [ ] B. Tumbling window
+- [ ] C. Sliding window
+- [ ] D. Hopping window
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+D => A hopping window is defined by two properties the window's size and its advance interval (aka "hop"), e.g., 
+a hopping window with a size 5 minutes and an advance interval of 1 minute.
+윈도우는 특정 기간 동안의 데이터를 하나의 상태로 묶어 서 집계하는 방식.
+Tubling : 고정 크기, 겹치지 않음 , Hopping : 고정 크기, 겹침 5분윈도우를 1분마다 이동하며 집계 , sliding : 고정 크기, 레코드 타임스탬프에 따라 동적으로 겹침 , session : 동적 크기, 비활성시간 기준으로 구분
+</details>
+
+<br>
+<br>
+
+## Question 37
+___
+A consumer receives a Kafka message that is serialized using an Avro schema. The consumer does not have cache locally mapping between the schema id and the schema.
+What does the consumer do?
+- [ ] A. The consumer throws an exception because it does not have the required schema.
+- [ ] B. The consumer consumes the message without the schema.
+- [ ] C. The consumer retrieves the schema from the schema registry.
+- [ ] D. The consumer drops do not consume the message because the mapping is not in its cache.
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+C => 컨슈머는 메시지에서 처음보는 스키마 ID를 읽고, Schema Registry에서 ID의 스키마를 조회하고, 조회한 스키마로 메시지 역직렬화 
+    알고 있다면 로컬캐시를 확인해서 있으면 바로 역직렬화
+</details>
+
+<br>
+<br>
+
+## Question 38
+___
+You are experiencing low throughput from a Java producer.
+Metrics show low I/O thread ratio and low I/O thread wait ratio.
+What is the most likely cause of the slow producer performance?
+- [ ] A. Compression is enabled.
+- [ ] B. The producer is sending large batches of messages.
+- [ ] C. There is a bad data link layer (layer 2) connection from the producer to the cluster.
+- [ ] D. The producer code has an expensive callback function.
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+D => Low I/O thread activity with blocked throughput often indicates that producer callbacks are consuming too much time, 
+causing the sender thread to block while waiting for onCompletion() to finish.
+From Kafka Producer Performance Guide:
+"Expensive logic in callbacks (e.g., I/O or complex computation) can block the sender thread, reducing throughput."
+* Compression (A) may slightly impact CPU but not I/O thread usage.
+* Large batches (B) improve throughput if managed correctly.
+* A Layer 2 network issue (C) would lead to packet loss, not specifically low callback metrics.
+Reference:Kafka Producer Metrics and Performance Tuning
+</details>
+
+<br>
+<br>
+
+## Question 39
+___
+Which of the following setting increases the chance of batching for a Kafka Producer?
+- [ ] A. Increase batch.size
+- [ ] B. Increase message.max.bytes
+- [ ] C. Increase the number of producer thread
+- [ ] D. Increase linger.ms
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+D => linger.ms forces the producer to wait to send messages, hence increasing the chance of creating batches
+batch.size , linger.ms 모두 Producer 설정이며 배치크기, 배치에 합류할 시간 기준임.. linger.ms가 0이면 바로바로 전송인데.
+batch.size는 배치가 가득 찬 조건만 제공하여, 메시지 유입이 느리면 효과가 없고, linger.ms 설정이 더 직접적인 batching chance를 늘리는데 더 효과적. 비치 처리 확률.
+</details>
+
+<br>
+<br>
+
+## Question 40
+___
+A kafka topic has a replication factor of 3 and min.insync.replicas setting of 2. How many brokers can go down before a producer with acks=1 can't produce?
+- [ ] A. 0
+- [ ] B. 3
+- [ ] C. 1
+- [ ] D. 2
+
+<details>
+<summary>
+<strong>
+🎯 Answer :
+</strong>
+</summary>
+D => min.insync.replicas does not impact producers when acks=1 (only when acks=all)
+</details>
+
+<br>
+<br>
