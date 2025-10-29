@@ -156,3 +156,27 @@ none : 예외를 발생시킴 (수동 처리)
 ## Kafka Producers
 Kafka Producers에서 Callback은 프로듀서가 메시지를 전송한 후, 
 그 결과(실패/성공) 비동기적으로 받아서 처리할 수 있게 해주는 메커니즘.
+
+## Kafka Streams
+ex ) 판매 데이터로부터 누적 합계를 계산해야하는 경우 , Operation(연산자), Method라고도 부름. 이 메소드들은 자바에서 KTable 혹은 KStream 객체로 받을 수 있음.
+group by : 렠고드를 키별로 그룹화
+reduce : 여러 개의 데이터들을 하나의 집계로 줄임(축약)
+windowed by, mapValues 또한 집계 operation이지만 필수는 아님
+
+## Kafka Core Concepts
+log.cleanup.policy=delete는 기본설정임. 기간은 7일 bytes는 기본은 무제한.
+log.cleanup.policy=compact는 Producer에서 같은 key로 보낸데이터중 최신 것만 남기는것. 키값의 최신 상태만 남김.
+log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정 , log.cleaner.backoff.ms=15000 시간마다 컴팩션 실행
+
+## Kafka Configuration
+Kafka Quota란게 client(Producer, Consumer) 별로 클러스터에 대한 사용량 제한을 두는것,kafka-configs.sh 명령어로 관리
+
+## Kafka Brokers
+Kafka Brokers는 데이터를 저장하고, client의 요청을 다루는 일을 한다. 카프카 클러스터 구성을 통해서 데이터를 보장한다.
+
+## Kafka KSQL
+KSQL PORT : 8088 (KSQL CLI, REST API 상호작용을 포함.) 
+9092 : kafka broker
+2181 : zookeeper
+8083 : kafka connect
+8081 : Schema Registry
