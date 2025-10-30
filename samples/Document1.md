@@ -180,3 +180,24 @@ KSQL PORT : 8088 (KSQL CLI, REST API 상호작용을 포함.)
 2181 : zookeeper
 8083 : kafka connect
 8081 : Schema Registry
+
+## Kafka Connect
+Kafka Connect Schema는 , Connector(Source, Sink)를 직접 개발할 때 사용함.
+Source Connector : 나중에 Sink가 쓸 수 있도록 타입 정보를 Schema로 만들어서 데이터와 함께 전달. Source가 보내지 않으면 타입 안정성이 없어져서 런타입 에러가 날 수 있음.
+Sink Connector : 받은 Schema를 보고 DB 타입에 맞게 저장
+스키마 정의서는 user Entity에 대한 구조와 데이터 타입, 데이터 통합과 지속성에 중대한, 업무 통압하는 동한 시스템에서 중요한
+
+## Kafka Producers
+데이터 생성량이 많은 기간 동안
+buffer.memory : 더 많은 데이터를 일시벅으로 보관함
+max.block.ms : send() => 토픽에 보내기전 Producer 내부 버퍼에 넣는것!. 버퍼를 꽉 채울 수 있도록 시간을 늘림.
+
+## Avro
+timestamp_millis (Under Bar)
+
+## Kafka Connect
+Kafka Connect는 다른 시스템 간에 데이터를 스트리밍하는 도구이다.
+플러그인 형 커넥터와 작업으로 구성된 런타입을 띄우고, 커넥터 설정만으로 손쉽게 데이터 이동을 수행.
+
+## Kafka Producers
+최대 데이터 안전성을 위해선 acks= 'all' 모든 in-sync replicas로 부터 성공 메시지 받는것을 보장하고, 멱등성을 "정확히 한번"을 통해 중복 데이터를 막아 데이터 손실을 막을 수 있다.
