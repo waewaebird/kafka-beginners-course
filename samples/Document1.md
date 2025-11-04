@@ -201,3 +201,28 @@ Kafka Connect는 다른 시스템 간에 데이터를 스트리밍하는 도구�
 
 ## Kafka Producers
 최대 데이터 안전성을 위해선 acks= 'all' 모든 in-sync replicas로 부터 성공 메시지 받는것을 보장하고, 멱등성을 "정확히 한번"을 통해 중복 데이터를 막아 데이터 손실을 막을 수 있다.
+
+## Confluent Schema Registry 
+Full Compatibility(전체 호환성): Backward Compatibility(후방) + Forward Compatibility(전방)
+Full Compatibility에서는 기본값(default)이 있는 필드만 추가하거나 제거할 수 있다.
+
+## Kafka Consumers
+subscribe() => 메서드는 컨슈머가 동적으로 파티션을 할당(group id 필요)받고 컨슈머 그룹에 참여,  리밸런싱 발생
+assign() => 컨슈머 그룹 코디네이션 없이 수동으로 파티션을 지정,  리밸런싱 발생 안함 
+
+## Kafka Streams
+카프카 스트림에서 모니터링 해야하는 핵심 Key는 process-rate, process-latency, commit-rate, commit-latency가 있다.
+데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
+
+## Kafka KSQL
+KSQL CLI를 통해, 쿼리를 작성하고 KSQL Stream을 만드는것.(SQL 기반)
+
+## Kafka Consumers
+Consumer Rebalance : 컨슈머 그룹 내에서 파티션 소유권을 재분배하는 과정. Eager와 Cooperative가 있음
+Eager는 Stop the world를 발생킴 모든컨슈머에게 다운타임을 발생하고, 모든파티션 재할당 함
+Cooperative 영향받는 파티션만 일부 컨슈머, 일부 파티션에서 발생함
+
+## Kafka Core Concepts
+아파치 카프카는 real-time데이터를 처리하고, 스티리밍 기능이 가능하도록 설계되어 시스템과 애플리케여신 간에 안정적인 데이터 전송을 제공합니다.
+즉 대용량의 실시간 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.
+데이터 파이프 라인 : 데이터 전달 통로. 데이터 소스 , 수집 , 가공/변환 , 저장 ,분석 활용등. 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템 전체
