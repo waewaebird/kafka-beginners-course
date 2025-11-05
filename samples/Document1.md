@@ -226,3 +226,73 @@ Cooperative 영향받는 파티션만 일부 컨슈머, 일부 파티션에서 �
 아파치 카프카는 real-time데이터를 처리하고, 스티리밍 기능이 가능하도록 설계되어 시스템과 애플리케여신 간에 안정적인 데이터 전송을 제공합니다.
 즉 대용량의 실시간 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.
 데이터 파이프 라인 : 데이터 전달 통로. 데이터 소스 , 수집 , 가공/변환 , 저장 ,분석 활용등. 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템 전체
+
+## Kafka Core Concepts
+Kafka의 로그 보존은 log.retention.hours 시간, log.retention.bytes 크기 둘을 기반으로한 정책을 통해 관리된다.
+
+## Kafka Security
+Kafka 보안관련 모니터링은
+failed_authentication_total (실패한 인증 시도 모니터링)
+Access Control List (Access Control List 관리)
+SASL (Simple Authentication and Security Layer 카프카 인증 매커니즘 작동 여부 확인)
+ssl_handshake_rate (암호화딘 연결 설정 상태 모니터링)
+
+## Kafka Core Concepts
+Kafka 로그 세그먼트는 log.retention.check.interval.ms 설정에 따라 주기적으로 백그라운드 스레드를 통해 로그 세그먼트 제거.
+log.retention.check.interval.ms 설정 시간마다 백그라운드 스레드가 실행되고
+→ log.retention.hours(시간), log.retention.bytes(크기)의
+로그 보존 정책을 위반한 로그 세그먼트들을 확인
+→ 위반된 세그먼트는 삭제함
+
+## Kafka Setup
+kafka의 재해 복구 계획에는 장애 발생시에도 데이터를 사용할 수 있도록 여러 위치에 데이터를 복제하는 전략이 포함되어야 합니다.
+- 여러 데이터 센터나 가용 영역에 복제 설정
+- 중요한 메타데이터 백업
+- 장애 조치와 복구 절차를 정기적으로 테스트 하여 신뢰성 확보
+
+## Kafka Streams
+- flatMapValues 연산 기능 : 각 입력 레코를 여러 출력 레코드로 변환
+입력 Record : key="order123", value={items: [item1, item2, item3]}
+출력: flatMapValues 연산을 통해
+  key="order123", value=item1
+  key="order123", value=item2
+  key="order123", value=item3
+
+- branch 연산 기능 : 조건에 따라 레코드를 여러 스트림으로 필터링
+if else나 case when 처럼 분기를 태워서 
+하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄.
+
+## Kafka Streams
+Window는 Kafka Streams의 시간 범위별 집계 도구.
+KStream 객체를 groupByKey()로 그룹화한 후,
+.windowedBy()와 집계 메소드(aggregate, count, reduce)를 통해
+KTable로 결과가 나옴.
+필요에 따라 다른 Stream 또는 토픽으로 보냄.
+Sliding Window : 윈도우가 연속적으로 겹침 , 시간 범위 내 모든 레코드 포함
+Hopping Window : 일정 간겨으로 점프
+Tumbling Window : 겹침 없는 고정 윈도우
+
+## Kafka Setup
+MirrorMaker는 Kafka클러스터의 데이터를 다른 Kafka클러스터로 복사하는 도구(백업용도, 지역별 서비스)
+MirrorMaker는 Kafka 설치 시 함께 제공되므로 별도 설치가 필요 없으며, 설정 파일 작성 후 스크립트를 실행하여 작동시키는 방식
+MirrorMaker 2.0 가장 중요한 업데이트 내용은
+1. 오프셋 동기화
+2. 향상된 처리량
+3. 자동화된 동기화
+
+## Kafka Configuration
+JVM Options 중 카비지 컬렉션이나, 힙메모리 사이즈 설정은 카프카 퍼포먼스를 강화할 수 있다. 특히 메모리 사용량이나 멈춤시간을 줄이는데 기여 가능함.
+
+## Kafka Core Concepts
+메시지 압축은 네트워크와 저장소 사용에 있어서 효과적인 향상을 줄수 있지만, 압축과 해제 과정에서 CPU자원의 추가 소모가 필요하다.
+
+## Kafka Core Concepts
+Partition 수를 증가시켜 컨슈머를 할당하여 더 많은 병렬 처리를 할 수 있지만, 감소는 불가능하다.
+또한 증가시 메시지 KEY가 변경되어 해시값이 달리져, 기존 KEY가 다른 파티션으로 할당될 수 있음. 이는 메시지 순서 보장을 꺠드릴 수 있음.
+
+## Kafka Configuration
+ex ) kafka-configs --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2
+를 통해 동적으로 변경가능 한 설정이 있음.
+
+## Kafka Core Concepts
+log.cleanup.policy를 Log Compaction은 토픽 레벨에서 적용되며, 같은 키에 대해 최신 값만 유지하고 이전 값들을 삭제
