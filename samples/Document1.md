@@ -296,3 +296,9 @@ ex ) kafka-configs --bootstrap-server localhost:9092 --entity-type brokers --ent
 
 ## Kafka Core Concepts
 log.cleanup.policy를 Log Compaction은 토픽 레벨에서 적용되며, 같은 키에 대해 최신 값만 유지하고 이전 값들을 삭제
+
+## Kafka Producers
+producer의 request.timeout.ms는 Kafka 프로듀서가 브로커로부터 응답을 받기 위해 기다리는 최대 시간.
+
+## Kafka Streams
+"TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌
