@@ -2,13 +2,16 @@
 
 ## Zookeeper
 ## Kraft
+___
 1. kafka Cluster의 메타데이터 관리와 조정역할을 함.
 2. Zookeeper는 Apache Zookeper라는 외부 별도 시스템, Kraft는 자체 내장 메커니즘
 3. ZooKeeper Node = ZooKeeper 서버 프로세스 (인스턴스) 그러나 보통 Node = 서버로 통용됨.
 4. ZooKeeper 앙상블에도 Zookeeper Node 즉 서버를 여러대 놓을 수 있음.
 5. ZooKeeper Quorum은 (total/2) + 1 개까지 남을 수 있음. 즉 정족수를 충족해야함. 충족하지 못한다면 Kafka 생태계가 점진적으로 마비됨.
 
+
 ## Kafka Brokers
+___
 1. 이벤트를 저장하는 Kafka 스토리지 계층의 서버.
 2. Kafka Brokers는 데이터를 저장하고, client(producer, consumer)의 요청을 다루는 일을 한다.
 3. Kafka Cluster에서 카프카 브로커에 대한 다양한 구성을 관리한다.
@@ -19,42 +22,115 @@
 8. 파티션의 리더 Broker가 In Sync Replicas 상태관리
 
 
-
 ## Kafka Producers
 ___
-Kafka에서 시리얼라이제이션은 효율적인 네트워크 전송을 위해 메시지를 바이트 배열로 변환하는것. String, JSON, AVRO, Protobuf등의 형식
+1. 프로듀서는 Kafka에 event를 입력하는 CLIENT.
+2. 프로듀서는 작성할 토픽을 지정하고, 토픽 내 파티션에 이벤트가 할당되는 방식을 제어.
+3. 프로듀서에서 효율적인 네트워크 전송을 위해 Serialization을 통해 메시지를 바이트 배열로 변환함. String, JSON, AVRO, Protobuf가 대표적인 직렬화 규칙(방식)
+4. batch.size : 동일한 파티션에 대한 레코드 배치의 최대 바이트 수. 배치가 이 크기에 도달하면 전송됨. 파티션마다 별도의 배치를 유지함. default:16kb 네트워크 오버헤드를 줄이고 처리량 효율성을 향상시킴. (전송 최적화 관련)
+5. linger.ms : 전송하기전 대기하는 시간. default:0ms이고 그 시간이 지나면 전송함. (전송 최적화 관련)
+6. batch.size , linger.ms 먼저 만족하는 조건에 따라 전송
+7. Low Latency를 위해선 linger.ms , batch.size 모두 작게 , High Throughput을 위해선 linger.ms , batch.size 모두 크게
+8. buffer.memory : 메시지를 즉시 브로커로 보내기 전 내부 메모리에 잠깐 보관(배치로 모아서 보내거나, 네트워크 대기를 위해). 모든 파티션이 공유하는 전체 메모리. default : 32mb
+9. max.block.ms : buffer.memory가 꽉 찼을때 (메시지 생성속도 > 전송속도) max.block.ms동안  buffer.memory에 공간이 생기기를 기다림.
+10. acks=0 브로커 응답을 기다리지 않고 buffer.memory를 해제함(전송 순간 해제)
+11. acks=1 리더 파티션에 저장되면 buffer.memory 해제
+12. acks=all(-1) 리더와 팔로워에 대한 응답을 받으면 버퍼를 해제함.
+13. producer의 callback은 프로듀서가 메시지를 전송 한 후 그 결과를 비동기적으로 받아서 처리할 수 있게 해주는 매커니즘.
+14. callback또한 acks설정 값에 따라 호출되는 시점이 달라진다.
+15. Idempotent Producer는 프로듀서와 브로커 간의 문제. 프로듀서가 토픽/파티션에 메시지를 쓸 때 중복을 방지하는 메커니즘. 
+16. 멱등성은 프로듀서가 재시도로 동일한 메시지를 여러 번 전송하더라고 메시지가 파티션에 정확히 한 번만 전달되도록 보장하여 중복을 방지.
+17. 프로듀서 측에서의 데이터 안정성 보장은 properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")해 달성 가능.
+18. properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")를 하면 acks=all retries > 0  max.in.flight.requests.per.connection ≤ 5 자동으로 설정된다.
+19. 설정간 충돌이 발생하면 ConfigException이 발생
+20. request.timeout.ms : acks=1 , acks=all 일경우 브로커로부터 응답을 받기 위해 기다리는 시간. 시간내에 못받으면 재시도(다시 메시지 전송)함.
 
-## Kafka Producers
+
+## Kafka Consumers
 ___
-Kafka Producers batch.size 동일한 파티션에 대한 레코드 배치에 포함될 수 있는 최대 바이트 수.
-이 크기를 초과하는 메시지는 배치 되지 않고, 여러 파티션으로 데이터를 전송하는 경우 단일 요청에 여러 배치가 포함될 수 있다.
-네트워크 오버헤드를 줄이고 처리량 효율성을 향상시킴.
+1. 컨슈머는 Kafka에서 event를 읽는 CLIENT.
+2. __consumer_offsets는 컨슈머가 직접 관리하는게 아님.
+3. Kafka Cluster 내부에 __consumer_offsets 내부 토픽이 있고 거기서 컨슈머 그룹의 offset을 전체 관리함.
+4. ConsumerGroup이라는 개념이 있음. 여러 컨슈머들의 논리적 그룹이고, group.id를 지정하여 집합으로 묶을 수 있음.
+5. 한 ConsumerGroup내에서 토픽의 각 파치션은 오직 한 멤버에 의해 소비됨.
+6. 컨슈머 그룹에 새로운 멤버가 참여하거나, 컨슈머가 장애로 HeartBeat 전송에 실패하거나, Consuming하고 있는 파티션 갯수가 증가하면 Kafka Consumer Rebalance(컨슈머그룹의 멤버가 소비하는 토픽의 리밸런식)가 발생한다. 
+7. 각 컨슈머 그룹마다 Group Coordinator가 할당되어(해쉬 로직으로 선정) 해당 그룹의 offset을 관리함. Group별 관리를 통해 효율성과 신뢰성을 높임.
+8. Consumer Rebalance에는 Eager와 Cooperative가 있음
+9. Eager는 Stop the world를 발생시킴. 모든 파티션을 회수한 후 전체 재할당. 다운타임 발생.
+10. Cooperative 영향받는 파티션만 재할당. 점진적 리밸런싱으로 다운타임 최소화 
+11. auto.offset.reset : 초기 오프셋이 없거나, 현재 오프셋이 유효하지 않을 때 컨슈머가 어떻게 동작할지를 정의. (__consumer_offsets 내부 토픽에서 이 컨슈머 그룹의 오프셋 조회)
+12. auto.offset.reset : earliest - 파티션의 가장 처음부터, latest - 컨슈머가 시작되는 시점의 토픽/파티션에서 가장 최신 오프셋(LEO) 위치부터 읽기 시작, none - 예외를 발생시킴 (수동 처리)
+13. consumer.commitSync() : poll()메시지 처리 완료 후, 명시적으로 offset 수동커밋, 기본은 자동 커밋(enable.auto.commit=true) , Group Coordinator로부터 응답을 받기 전까지 다음 코드로 진행하지 않습니다. (blocking)
+14. subscribe() : Consumer Group에 참여. 파티션 자동할당. 리밸런싱 발생 consumer.subscribe(Arrays.asList("topic1", "topic2")); (props1.put("group.id", "group-A") 그룹 아이디 설정은 subscribe전에 해야함)
+15. assign() : 파티션 수동 할당. 그룹 참여 하지 않고 리밸런싱 발생 안함 consumer.assign(Arrays.asList(new TopicPartition("topic", 0)));
+16. seek() : consumer가 읽을 위치(offset)를 수동으로 지정. consumer.seek(topicPartition, offset); 실패한 메시지 재처리, 특정 메시지 반복 분석, 동일 데이터에 대한 비교 분석 위해 씀.
+17. poll전에 초기에 입력하거나 consumer.seek(partition0, 100);  , 에러 발생시 재처리 catch 블록에 적거나, 아무튼 컨슈머 로직의 poll 전에 넣어야 함. (여기서 부터 다시 poll 해라라는 의미)
 
-## Kafka Producers
+
+## Kafka Core Concepts
 ___
-Kafka Producer가 낮은 지연시간을 달성하기 위해.
-linger.ms를 낮추고, batch.size를 작은 단위로 줄이면 됨
-Low Latency : 지연시간을 낮추기 위해선 -> 작은 linger.ms 작은 batch.size
-High Throughput : 처리량을 높이기 위해선 -> 큰 linger.ms 큰 batch.size
+1. Offset은 보통 파티션 내 데이터의 고유한 순번을 말함. 메시지가 토픽에 생설될 때 브로커가 자동 할당함.(consumer_offset은 컨슈머가 어디까지 읽었는지 추적하는 값)
+2. Kafka는 .index 파일을 사용해 메시지를 빠르게 찾음. 오프셋-> 파일 위치 매핑 정보를 저장하여 전체 파일을 스캔하지 않고 바로 원하는 위치로 점프 가능 
+3. 토픽의 실제 메시지 데이터는 .log파일에 들어가 있고 그와 매핑되는 .index 파일도 있음(00000000000000001000.log , 00000000000000001000.index)
+4. 특정 offset의 파일을 찾을때는 파일명으로 먼저 세그먼트를 선택하고, .index파일에서 물리적 위치를 찾아 .log에 있는 메시지 데이터를 찾을 수 있음. 
+5. 주키퍼 의존성을 지우기 위해 Kraft의 Quorum Controller가 있음. 클러스터의 메타데이터, 파티션 리더쉽, 멤버쉽 변화를 관리.
+???기존 Controller브로커와 QuorumCOntroller의 역할 및 정리 필요
 
-## Kafka Producers
-Idempotent Producer는 프로듀서와 브로커 간의 문제. 즉 프로듀서가 토픽/파티션에 메시지를 쓸 때 중복을 방지하는 메커니즘.
-멱등성은 프로듀서가 재시도로 동일한 메시지를 여러 번 전송하더라고 메시지가 파티션에 정확히 한 번만 전달되도록 보장하여 중복을 방지.
 
-## Kafka Producers
-Kafka Producers에서 Callback은 프로듀서가 메시지를 전송한 후,
-그 결과(실패/성공) 비동기적으로 받아서 처리할 수 있게 해주는 메커니즘.
 
-## Kafka Producers
-데이터 생성량이 많은 기간 동안
-buffer.memory : 더 많은 데이터를 일시벅으로 보관함
-max.block.ms : send() => 토픽에 보내기전 Producer 내부 버퍼에 넣는것!. 버퍼를 꽉 채울 수 있도록 시간을 늘림.
 
-## Kafka Producers
-최대 데이터 안전성을 위해선 acks= 'all' 모든 in-sync replicas로 부터 성공 메시지 받는것을 보장하고, 멱등성을 "정확히 한번"을 통해 중복 데이터를 막아 데이터 손실을 막을 수 있다.
 
-## Kafka Producers
-producer의 request.timeout.ms는 Kafka 프로듀서가 브로커로부터 응답을 받기 위해 기다리는 최대 시간.
+
+## Kafka Core Concepts
+___
+exactly-once를 활성화 하기 위해선
+enable.idempotence=true 설정 + transactional.id= 를 Properties 객체에서 설정
+
+
+## Kafka Core Concepts
+아파치 카프카는 real-time데이터를 처리하고, 스티리밍 기능이 가능하도록 설계되어 시스템과 애플리케여신 간에 안정적인 데이터 전송을 제공합니다.
+즉 대용량의 실시간 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.
+데이터 파이프 라인 : 데이터 전달 통로. 데이터 소스 , 수집 , 가공/변환 , 저장 ,분석 활용등. 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템 전체
+
+## Kafka Core Concepts
+Kafka의 로그 보존은 log.retention.hours 시간, log.retention.bytes 크기 둘을 기반으로한 정책을 통해 관리된다.
+
+
+
+## Kafka Core Concepts
+메시지 압축은 네트워크와 저장소 사용에 있어서 효과적인 향상을 줄수 있지만, 압축과 해제 과정에서 CPU자원의 추가 소모가 필요하다.
+
+## Kafka Core Concepts
+Partition 수를 증가시켜 컨슈머를 할당하여 더 많은 병렬 처리를 할 수 있지만, 감소는 불가능하다.
+또한 증가시 메시지 KEY가 변경되어 해시값이 달리져, 기존 KEY가 다른 파티션으로 할당될 수 있음. 이는 메시지 순서 보장을 꺠드릴 수 있음.
+
+
+## Kafka Core Concepts
+log.cleanup.policy를 Log Compaction은 토픽 레벨에서 적용되며, 같은 키에 대해 최신 값만 유지하고 이전 값들을 삭제
+
+
+## Kafka Core Concepts
+Kafka 로그 세그먼트는 log.retention.check.interval.ms 설정에 따라 주기적으로 백그라운드 스레드를 통해 로그 세그먼트 제거.
+log.retention.check.interval.ms 설정 시간마다 백그라운드 스레드가 실행되고
+→ log.retention.hours(시간), log.retention.bytes(크기)의
+로그 보존 정책을 위반한 로그 세그먼트들을 확인
+→ 위반된 세그먼트는 삭제함
+
+
+## Kafka Core Concepts
+log.cleanup.policy=delete는 기본설정임. 기간은 7일 bytes는 기본은 무제한.
+log.cleanup.policy=compact는 Producer에서 같은 key로 보낸데이터중 최신 것만 남기는것. 키값의 최신 상태만 남김.
+log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정 , log.cleaner.backoff.ms=15000 시간마다 컴팩션 실행
+
+
+
+
+
+
+
+
+
+
 
 ## Kafka Streams
 ___
@@ -79,11 +155,6 @@ request-latency-avg는 프로듀서 / 컨슈머가 브로커에게 요청을 보
 
 
 
-## Kafka Core Concepts
-___
-Kafka는 오프셋 인덱스를 사용하여 읽기 성능을 향상시킴. 각 로그 세그먼트마다 인덱스 파일(.index)을 생성하여 메시지 오프셋과 해당 메시지의 물리적 파일위치를 매핑합니다.
-= 각로그 세그먼트에 대한 인덱스를 유지하여 메시지 오프셋을 파일 위치에 매핑함으로써 전체 세그먼트를 스캔할 필요 없이 메시지를 빠르게 찾고 접근.
-
 
 
 ## Kafka Streams
@@ -92,9 +163,7 @@ ___
 1. Kafka Streams : 분산 스트림 처리를 가능하게 하여, 병렬 처리를 통해 대용량 데이터를 처리하는 능력을 향상
 2. 파티션 수 증가 : 병렬성을 향상시켜 더 많은 컨슈머가 동시에 데이터를 처리할 수 있도록 하며, 이를 통해 처리량을 개선하고 처리 시간을 단축.
 
-## Kafka Consumers
-___
-컨뮤서가 그룹에 참여가하거나 떠나거나, 허트비트를 보내는데 실패하거나, 컨슈밍하고있는 파티션의 변화가 있으면 카프카 컨슈머 리밸런싱이 발생한다.
+
 
 ## Confluent REST Proxy
 ___
@@ -103,10 +172,7 @@ REST Proxy는 HTTP/JSON 기반이라서 전송을 위해 base64필요
 REST Proxy가 base64 문자열을 디코딩하여 원본 바이트로 변환, Kafka토픽에 저장
 Kafka컨슈머는 바이너리 데이터 수신. 추가 디코딩 필요 없음.
 
-## Kafka Core Concepts
-___
-Quorum(정족수) Controller는 주키퍼 의존성을 지우기 위해 만들어짐. 클러스터 메타데이터, 파티션 리더쉽 멤버쉽 변화을 운영하는데 있어서의 권한을 다룬다.
-Kraft의 핵심구성요소.
+
 
 ## Kafka Streams
 ___
@@ -122,18 +188,10 @@ ___
 Kafka Streams의 병렬 처리 단위는 Partition. Partition당 하나의 Task가 생성됨. 
 Source Topic 파티션 수 = Stream Task 수 (일대일)
 
-## Kafka Consumers
-___
-__consumer_offsets은 컨슈머가 직접 관리하는게 아님.
-Kafka Cluster 내부에 __consumer_offsets 토픽이라는 내부 토픽이 있고, 거기서 컨슈머 그룹의 offset을 전체 관리함.
-특히, 그안에서 Group Coordinator로 선정(해쉬 로직으로..)된 브로커가 관리함.
-이런식으로 중앙집권화 관리하고, 효율성과 신뢰성을 높임.
 
 
 
-## Kafka Core Concepts
-___
-Offset이란 파티션 내 데이터의 순번
+
 
 ## Kafka Configuration
 ___
@@ -156,16 +214,12 @@ ___
 Avro Logical Type이란 기본 타입을 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것
 Time-millis , Decimal , Timestamp-millis , Date 등이 있다.
 
-## Kafka Core Concepts
-___
-exactly-once를 활성화 하기 위해선
-enable.idempotence=true 설정 + transactional.id= 를 Properties 객체에서 설정
+
 
 ## Kafka Monitoring
 Kafka I/O작업에서 비정상적인 패턴 발견되면, 디스크 I/O 메트릭과 로그를 확인하여 급격한 변화나 오류를 찾기가 먼저다.
 
-## Kafka Consumers
-consumer.commitSync(); / 수동커밋 : 동기적으로 컨슈머 커밋
+
 
 ## Kafka KSQL
 KSQL의 배포 옵션에는 Headless Mode, Interactive Mode가 있음.
@@ -175,11 +229,7 @@ Interactive : CLI 또는 REST API , 통해 대화형으로 실시간 쿼리 실�
 ## Kafka Testing
 테스트를 위해  kafka-console-producer.sh와 kafka-console-consumer.sh 사용된다. 
 
-## Kafka Consumers
-seek Method는 파티션의 오프셋을 특정위치로 수동으로 설정하기 위해 쓰임.
-1. 실패한 메시지 재처리
-2. 특정 메시지를 반복적으로 분석해야하는 경우
-3. 동일한 데이터에 대한 A/B 비교 분석 위해.
+
 
 
 ## Kafka Streams
@@ -189,14 +239,6 @@ Summing - Key별 합계
 Min/Max - Key별 최댓갑 최소값 계산
 Count - Key별 이벤트 횟수 세기
 
-## Kafka Consumers
-auto.offset.reset의 역할은 
-1. 초기 오프셋이 없을때
-2. 현재 오프셋이 더 이상 유효하지 않을 때 
-컨슈머가 어떻게 동작할지를 정의. __consumer_offsets 내부 토픽에서 이 컨슈머 그룹의 커밋 오프셋 조회.
-earliest : 파티션의 가장 처음부터
-latest : 컨슈머가 시작되는 시점의 토픽/파티션에서 가장 최신 오프셋(LEO) 위치부터 읽기 시작
-none : 예외를 발생시킴 (수동 처리)
 
 
 
@@ -206,10 +248,6 @@ group by : 렠고드를 키별로 그룹화
 reduce : 여러 개의 데이터들을 하나의 집계로 줄임(축약)
 windowed by, mapValues 또한 집계 operation이지만 필수는 아님
 
-## Kafka Core Concepts
-log.cleanup.policy=delete는 기본설정임. 기간은 7일 bytes는 기본은 무제한.
-log.cleanup.policy=compact는 Producer에서 같은 key로 보낸데이터중 최신 것만 남기는것. 키값의 최신 상태만 남김.
-log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정 , log.cleaner.backoff.ms=15000 시간마다 컴팩션 실행
 
 ## Kafka Configuration
 Kafka Quota란게 client(Producer, Consumer) 별로 클러스터에 대한 사용량 제한을 두는것,kafka-configs.sh 명령어로 관리
@@ -244,9 +282,7 @@ Kafka Connect는 다른 시스템 간에 데이터를 스트리밍하는 도구�
 Full Compatibility(전체 호환성): Backward Compatibility(후방) + Forward Compatibility(전방)
 Full Compatibility에서는 기본값(default)이 있는 필드만 추가하거나 제거할 수 있다.
 
-## Kafka Consumers
-subscribe() => 메서드는 컨슈머가 동적으로 파티션을 할당(group id 필요)받고 컨슈머 그룹에 참여,  리밸런싱 발생
-assign() => 컨슈머 그룹 코디네이션 없이 수동으로 파티션을 지정,  리밸런싱 발생 안함 
+
 
 ## Kafka Streams
 카프카 스트림에서 모니터링 해야하는 핵심 Key는 process-rate, process-latency, commit-rate, commit-latency가 있다.
@@ -255,18 +291,8 @@ assign() => 컨슈머 그룹 코디네이션 없이 수동으로 파티션을 �
 ## Kafka KSQL
 KSQL CLI를 통해, 쿼리를 작성하고 KSQL Stream을 만드는것.(SQL 기반)
 
-## Kafka Consumers
-Consumer Rebalance : 컨슈머 그룹 내에서 파티션 소유권을 재분배하는 과정. Eager와 Cooperative가 있음
-Eager는 Stop the world를 발생킴 모든컨슈머에게 다운타임을 발생하고, 모든파티션 재할당 함
-Cooperative 영향받는 파티션만 일부 컨슈머, 일부 파티션에서 발생함
 
-## Kafka Core Concepts
-아파치 카프카는 real-time데이터를 처리하고, 스티리밍 기능이 가능하도록 설계되어 시스템과 애플리케여신 간에 안정적인 데이터 전송을 제공합니다.
-즉 대용량의 실시간 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.
-데이터 파이프 라인 : 데이터 전달 통로. 데이터 소스 , 수집 , 가공/변환 , 저장 ,분석 활용등. 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템 전체
 
-## Kafka Core Concepts
-Kafka의 로그 보존은 log.retention.hours 시간, log.retention.bytes 크기 둘을 기반으로한 정책을 통해 관리된다.
 
 ## Kafka Security
 Kafka 보안관련 모니터링은
@@ -275,12 +301,6 @@ Access Control List (Access Control List 관리)
 SASL (Simple Authentication and Security Layer 카프카 인증 매커니즘 작동 여부 확인)
 ssl_handshake_rate (암호화딘 연결 설정 상태 모니터링)
 
-## Kafka Core Concepts
-Kafka 로그 세그먼트는 log.retention.check.interval.ms 설정에 따라 주기적으로 백그라운드 스레드를 통해 로그 세그먼트 제거.
-log.retention.check.interval.ms 설정 시간마다 백그라운드 스레드가 실행되고
-→ log.retention.hours(시간), log.retention.bytes(크기)의
-로그 보존 정책을 위반한 로그 세그먼트들을 확인
-→ 위반된 세그먼트는 삭제함
 
 ## Kafka Setup
 kafka의 재해 복구 계획에는 장애 발생시에도 데이터를 사용할 수 있도록 여러 위치에 데이터를 복제하는 전략이 포함되어야 합니다.
@@ -321,19 +341,12 @@ MirrorMaker 2.0 가장 중요한 업데이트 내용은
 ## Kafka Configuration
 JVM Options 중 카비지 컬렉션이나, 힙메모리 사이즈 설정은 카프카 퍼포먼스를 강화할 수 있다. 특히 메모리 사용량이나 멈춤시간을 줄이는데 기여 가능함.
 
-## Kafka Core Concepts
-메시지 압축은 네트워크와 저장소 사용에 있어서 효과적인 향상을 줄수 있지만, 압축과 해제 과정에서 CPU자원의 추가 소모가 필요하다.
 
-## Kafka Core Concepts
-Partition 수를 증가시켜 컨슈머를 할당하여 더 많은 병렬 처리를 할 수 있지만, 감소는 불가능하다.
-또한 증가시 메시지 KEY가 변경되어 해시값이 달리져, 기존 KEY가 다른 파티션으로 할당될 수 있음. 이는 메시지 순서 보장을 꺠드릴 수 있음.
 
 ## Kafka Configuration
 ex ) kafka-configs --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2
 를 통해 동적으로 변경가능 한 설정이 있음.
 
-## Kafka Core Concepts
-log.cleanup.policy를 Log Compaction은 토픽 레벨에서 적용되며, 같은 키에 대해 최신 값만 유지하고 이전 값들을 삭제
 
 
 
