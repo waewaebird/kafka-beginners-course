@@ -15,11 +15,11 @@ ___
 1. 이벤트를 저장하는 Kafka 스토리지 계층의 서버.
 2. Kafka Brokers는 데이터를 저장하고, client(producer, consumer)의 요청을 다루는 일을 한다.
 3. Kafka Cluster에서 카프카 브로커에 대한 다양한 구성을 관리한다.
-4. Controller라는 것이 있음. Cluster가 시작되면 Broker들 중 Zookeeper(Kraft)가 가장 먼저 도착한 Broker를 ControllerBroker로 지정.
+4. Controller라는 것이 있음. Cluster가 시작되면 Broker들 중 Zookeeper(Kraft)가 합의 알고리즘을 통해 특정 Broker를 ControllerBroker로 지정.
 5. ControllerBroker가 Topic 파티션 어느 브로커에 어떤 파티션을 배치할지 계획 수립
 6. ControllerBroker가 파티션의 복제본을 관리 
 7. ControllerBroker가 파티션의 리더를 선출하고 ISR 변경사항 메타데이터에 기록
-8. 파티션의 리더 Broker가 In Sync Replicas 상태관리
+8. 파티션의 리더 Broker가 In Sync Replicas, follower 모니터링
 
 
 ## Kafka Producers
@@ -69,64 +69,91 @@ ___
 
 ## Kafka Core Concepts
 ___
+0. 아파치 카프카는 real-time 데이터를 처리하고, 스트리밍 기능이 가능하도록 설계되어 시스템과 애플리케이션 간에 안정적인 데이터 전송을 제공.
+0. 실시간 대용량 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.(DataPipeLine : 데이터 전달 통로. 데이터 소스,수집,가공/변환,저장,분석, 활용 등 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템)
 1. Offset은 보통 파티션 내 데이터의 고유한 순번을 말함. 메시지가 토픽에 생설될 때 브로커가 자동 할당함.(consumer_offset은 컨슈머가 어디까지 읽었는지 추적하는 값)
 2. Kafka는 .index 파일을 사용해 메시지를 빠르게 찾음. 오프셋-> 파일 위치 매핑 정보를 저장하여 전체 파일을 스캔하지 않고 바로 원하는 위치로 점프 가능 
 3. 토픽의 실제 메시지 데이터는 .log파일에 들어가 있고 그와 매핑되는 .index 파일도 있음(00000000000000001000.log , 00000000000000001000.index)
 4. 특정 offset의 파일을 찾을때는 파일명으로 먼저 세그먼트를 선택하고, .index파일에서 물리적 위치를 찾아 .log에 있는 메시지 데이터를 찾을 수 있음. 
 5. 주키퍼 의존성을 지우기 위해 Kraft의 Quorum Controller가 있음. 클러스터의 메타데이터, 파티션 리더쉽, 멤버쉽 변화를 관리.
-???기존 Controller브로커와 QuorumCOntroller의 역할 및 정리 필요
+6. Kraft모드에서는 Controller가 QuorumController Cluster로 여러대 구성돼 있음. ControllerBroker가 QuorumController로 진화함.
+7. 역할은 동일 파티션 배치, 리더 선출, ISR 관리 등.
+8. 단일 Controller가 아닌 Quorum(정족수) 기반, 그 중 실제 일하는 Active Leader가 있고, 장애 시 하나가 리더로 승격
+9. 장애 복구시 Zookeeper에서는 재선출이 필요해서 느리지만, Kraft에서는 빠르게 증시 승격
+10. Producer에서 메시지 압축을 통해 네트워크 효율과, Broker 저장소 사용에 있어서 향상을 줌. 하지만 Producer의 압축과정, Consumer의 해제과정에서 CPU자원의 추가 소모가 들어감.
+11. Partition수를 증가시켜 컨슈머그룹에서 컨슈머를 할당하면 더 많은 병렬처리가 가능하지만 감소는 불가능 함. 
+12. 파티션 수 증가 시 Key의 파티션 매핑이 변경되어 동일 Key의 메시지가 다른 파티션으로 분산되며, 이는 순서 보장을 깨뜨림.
+13. 일반적인 Exactly-Once 는 Producer to Broker Exactly-Once , 이것은 Producer가 Broker에게 정확히 한번 쓰기 보장.
+14. props.put("enable.idempotence", "true");
+15. props.put("acks", "all");
+16. props.put("retries", Integer.MAX_VALUE);
+17. props.put("max.in.flight.requests.per.connection", 5); 
+18. Kafka Stream에서 주로 사용하는 Exactly-Once는 읽기 -> 처리 -> 쓰기 전체를 원자적으로 처리, Consumer offset commit까지 Transaction으로 포함.
+19. props.put("enable.idempotence", "true");
+20. props.put("transactional.id", "order-service-producer"); // Producer 인스턴스 하나당 하나의 고유한 값.
+21. 읽기 처리 쓰기를 하나의 Transaction으로 묶음. producer.beginTransaction(); producer.send(msg); producer.commitTransaction(); //여기서 트랜잭션 끝
+22. log.cleanup.policy : compact로 설정하면 LogCompaction 활성화 되고, Producer에서 보낸 같은 Key에 대한 최신값만 유지하고 이전 값들은 삭제.
+23. log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정. 낮을 수록 더 자주 트리거 됨
+24. log.cleaner.backoff.ms=15000 Cleaner 스레드 체크 간격 (기본 15초).
+25. log.cleanup.policy : delete 시간/크기 기반 삭제(기본값) , 기간은 7일 bytes는 기본은 무제한.
+26. log.retention.check.interval.ms : 설정 시간마다 백그라운드 스레드가 실행되고 로그 세그먼트 확인(compact, delete, compact+delete)
+27. log.retention.hours : 로그 보관 기간 (기본 168시간 = 7일).  이 시간을 초과한 세그먼트 삭제. 
+28. log.retention.bytes : 파티션당 최대 로그 크기 (기본 -1 = 무제한). 이 크기를 초과하면 가장 오래된 세그먼트부터 삭제.
 
 
-
-
-
-
-## Kafka Core Concepts
+## Kafka Configuration
 ___
-exactly-once를 활성화 하기 위해선
-enable.idempotence=true 설정 + transactional.id= 를 Properties 객체에서 설정
+1. Kafka의 보존 설정은 log.retention.hours , log.retention.bytes , log.retention.minutes가 있다.
+2. .log .index .timeindex 3개 파일을 하나의 '세그먼트'라 부르고 설정에 따라 통째로 세그먼트를 삭제한다.
+3. JVM Options 중 가비지 컬렉션(G1GC 권장)과 힙 메모리 크기 설정은 Kafka 성능 향상에 중요함. 특히 GC pause 시간을 줄여 처리량과 지연시간을 개선할 수 있음.
+4. kafka-configs --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2 를 통해 동적으로 변경가능 한 설정이 있음. 
+5. Kafka는 일부 설정(Broker/Topic 레벨)을 재시작 없이 동적으로 변경 가능함. kafka-configs 명령어 사용
+6. Kafka Quota란게 특정 client(Producer, Consumer)가 Kafka를 독점하지 못하도록 제한하는 기능 
+7. ex ) Producer A의 과도한 전송(1GB/s)이 Producer B에 영향 → Quota로 공평하게 제한 (각 100MB/s)
+8. kafka-configs.sh 명령어로 관리
+9. Producer Quota (쓰기 제한) , Consumer Quota (읽기 제한) , Request Quota (요청 수 제한)
 
 
-## Kafka Core Concepts
-아파치 카프카는 real-time데이터를 처리하고, 스티리밍 기능이 가능하도록 설계되어 시스템과 애플리케여신 간에 안정적인 데이터 전송을 제공합니다.
-즉 대용량의 실시간 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.
-데이터 파이프 라인 : 데이터 전달 통로. 데이터 소스 , 수집 , 가공/변환 , 저장 ,분석 활용등. 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템 전체
-
-## Kafka Core Concepts
-Kafka의 로그 보존은 log.retention.hours 시간, log.retention.bytes 크기 둘을 기반으로한 정책을 통해 관리된다.
-
-
-
-## Kafka Core Concepts
-메시지 압축은 네트워크와 저장소 사용에 있어서 효과적인 향상을 줄수 있지만, 압축과 해제 과정에서 CPU자원의 추가 소모가 필요하다.
-
-## Kafka Core Concepts
-Partition 수를 증가시켜 컨슈머를 할당하여 더 많은 병렬 처리를 할 수 있지만, 감소는 불가능하다.
-또한 증가시 메시지 KEY가 변경되어 해시값이 달리져, 기존 KEY가 다른 파티션으로 할당될 수 있음. 이는 메시지 순서 보장을 꺠드릴 수 있음.
-
-
-## Kafka Core Concepts
-log.cleanup.policy를 Log Compaction은 토픽 레벨에서 적용되며, 같은 키에 대해 최신 값만 유지하고 이전 값들을 삭제
+## Kafka Setup
+___
+1. MirrorMaker는 재해 복구, 지역별 서비스, 데이터 통합/분리를 위해 KafkaCluster의 데이터를 다른 KafkaCluster로 복사하는 것.
+2. 최소 2개의 cluster 필요
+3. MirrorMaker는 Kafka 설치 시 함께 제공되므로 별도 설치가 필요 없고, 설정 파일 작성 후 스크립트를 실행하여 작동시키는 방식.
+4. 별도의 MirrorMaker를 두고 bin/connect-mirror-maker.sh mm2.properties 명령어를 통해서 실행
+5. Zookeeper, Kraft 또는 별도의 설정을 복사하는건 아니고, 토픽의 메시지 데이터(세그먼트)만 복사한다.
+4. MirrorMaker 2.0 가장 중요한 업데이트 내용은
+5. Kafka Connect 기반 아키텍처로 전환 (확장성/안정성 향상)
+6. Consumer Group 오프셋 자동 동기화 (재해 복구 지원)
+7. 정규식 기반 토픽 자동 복제
+8. 양방향 복제 지원 (Active-Active)
+9. kafka의 재해 복구 계획에는 장애 발생시에도 데이터를 사용할 수 있도록 여러 위치에 데이터를 복제하는 전략이 포함되어야 합니다. 
+10. 여러 데이터 센터나 가용 영역에 복제 설정
+11. 중요한 메타데이터 백업
+12. 장애 조치와 복구 절차를 정기적으로 테스트 하여 신뢰성 확보 
 
 
-## Kafka Core Concepts
-Kafka 로그 세그먼트는 log.retention.check.interval.ms 설정에 따라 주기적으로 백그라운드 스레드를 통해 로그 세그먼트 제거.
-log.retention.check.interval.ms 설정 시간마다 백그라운드 스레드가 실행되고
-→ log.retention.hours(시간), log.retention.bytes(크기)의
-로그 보존 정책을 위반한 로그 세그먼트들을 확인
-→ 위반된 세그먼트는 삭제함
+## Kafka Monitoring
+___
+1. request-latency-avg 모니터링 지표는 프로듀서 or 컨슈머가 브로커에게 요청을 보낸 후 응답받기까지의 평균시간 (ms) , 낮을 수록 좋은거!
+2. Kafka I/O작업에서 비정상적인 패턴 발견되면, 디스크 I/O 메트릭 (사용률, IOPS, 지연시간) , 브로커 로그 (I/O 관련 에러) , 관련 시스템 메트릭 (CPU, 메모리) 순서
 
 
-## Kafka Core Concepts
-log.cleanup.policy=delete는 기본설정임. 기간은 7일 bytes는 기본은 무제한.
-log.cleanup.policy=compact는 Producer에서 같은 key로 보낸데이터중 최신 것만 남기는것. 키값의 최신 상태만 남김.
-log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정 , log.cleaner.backoff.ms=15000 시간마다 컴팩션 실행
+## Kafka Streams
+___
+1. kafka안에서 데이터를 실시간으로 변환/처리하는 라이브러리.
+2. kafka안에서 돌아가고 kafka를 사용하는 애플리케이션.
+3. 여러 토픽에서 데이터를 읽어 변환/집계하고, 결과를 다른 토픽으로 출력한다.
+4. Kafka Streams를 처리하는 두 가지 방식에는 DSL과 ProcessorAPI가 있음
+5. DSL은 간단한 코드로 데이터를 처리할 수 있음 filter(), map(), join() 등
+6. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현).
 
 
 
-
-
-
+Join이란 두 개 이상의 스트림/테이블 데이터를 결합하는것. SQL의 join과 비슷함.
+Stream은 계속 흐르는데, 매칭할 데이터를 기다려야(매칭 대기) 하니깐 상태저장이 필요 stateful하다.
+(the join operation in Kafka is stateful. It requires maintaining state information about the streams or tables being joined to handle the combination of data
+across different time windows or key matches. This statefulness allows Kafka to manage complex joins that integrate data arriving at different times,
+ensuring accurate and timely results in stream processing applications)
 
 
 
@@ -136,20 +163,10 @@ log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정 , log.cleaner.bac
 ___
 KafkaStreams의 핵심 확장성 모델은 => 수평적 확장 , 파티셔닝 + 인스턴스 분산 + 자동 리벨렁싱 + 선형적 확장성
 
-## Kafka Streams
-___
-Join이란 두 개 이상의 스트림/테이블 데이터를 결합하는것. SQL의 join과 비슷함.
-Stream은 계속 흐르는데, 매칭할 데이터를 기다려야(매칭 대기) 하니깐 상태저장이 필요 stateful하다.
-(the join operation in Kafka is stateful. It requires maintaining state information about the streams or tables being joined to handle the combination of data
-across different time windows or key matches. This statefulness allows Kafka to manage complex joins that integrate data arriving at different times,
-ensuring accurate and timely results in stream processing applications)
+
 
 
  
-
-## Kafka Monitoring
-___
-request-latency-avg는 프로듀서 / 컨슈머가 브로커에게 요청을 보낸 후 응답받기까지의 평균시간 (ms) , 낮을 수록 좋은거!
 
 
 
@@ -163,17 +180,6 @@ ___
 1. Kafka Streams : 분산 스트림 처리를 가능하게 하여, 병렬 처리를 통해 대용량 데이터를 처리하는 능력을 향상
 2. 파티션 수 증가 : 병렬성을 향상시켜 더 많은 컨슈머가 동시에 데이터를 처리할 수 있도록 하며, 이를 통해 처리량을 개선하고 처리 시간을 단축.
 
-
-
-## Confluent REST Proxy
-___
-REST Proxy는 HTTP/JSON 기반이라서 전송을 위해 base64필요
-프로듀서가 바이너리 데이터를 base64로 인코딩하여 HTTP/JSON으로 전송, REST API는 텍스트 기반이므로 바이너리 데이터를 base64로 인코딩해야함.
-REST Proxy가 base64 문자열을 디코딩하여 원본 바이트로 변환, Kafka토픽에 저장
-Kafka컨슈머는 바이너리 데이터 수신. 추가 디코딩 필요 없음.
-
-
-
 ## Kafka Streams
 ___
 Kafka Streams API의 설정 키 상수에는 _CONFIG 접미사를 사용하는게 권장된다고 함. 더 나아가 Kafka Java API 네이밍 컨벤션.
@@ -185,52 +191,20 @@ Kafka Streams의 내부를 확인하기 위해. 개발자가 직접 REST API를 
 
 ## Kafka Streams
 ___
-Kafka Streams의 병렬 처리 단위는 Partition. Partition당 하나의 Task가 생성됨. 
+Kafka Streams의 병렬 처리 단위는 Partition. Partition당 하나의 Task가 생성됨.
 Source Topic 파티션 수 = Stream Task 수 (일대일)
-
-
-
-
-
-
-## Kafka Configuration
-___
-Kafka 로그 보존 설정은 log.retention.hours, log.retention.bytes, log.retention.minutes 이 있다.
 
 ## Kafka Streams
 ___
-Kafka Streams의 데이터는 계속해서 흘러들어오고 나가는것. 그래서 특정 기준 범위로 끊는 Window 타입이란게 있음. 
+Kafka Streams의 데이터는 계속해서 흘러들어오고 나가는것. 그래서 특정 기준 범위로 끊는 Window 타입이란게 있음.
 Tumbling Windows : 고정시간 분 , 시간 , 일일 통계등 겹치지 안흔 고정 시간. 시간기준
 Hopping Windows : 중첩시간 윈도우 10분 짜리 길이의 윈도우를 5분마다 이동. 겹치는 시간이 존재. 시간기준
 Sliding Windows : 최소 두 이벤트. 그 이벤트들이 발생할때의 시간차. 이벤트 기준
-                    Event at 00:01 → [23:51-00:01] 윈도우 생성/업데이트
-                    Event at 00:03 → [23:53-00:03] 윈도우 생성/업데이트
-                    Event at 00:07 → [23:57-00:07] 윈도우 생성/업데이트
-                    이벤트마다 지속적으로 업데이트 됨.
+Event at 00:01 → [23:51-00:01] 윈도우 생성/업데이트
+Event at 00:03 → [23:53-00:03] 윈도우 생성/업데이트
+Event at 00:07 → [23:57-00:07] 윈도우 생성/업데이트
+이벤트마다 지속적으로 업데이트 됨.
 Session Windows : Gap이라는 비활동 시간으로 구분해서 사용자 활동 패턴 파악. 사용자 세션 기준이라 크기가 동적임. 비활동 기준
-
-## Avro
-___
-Avro Logical Type이란 기본 타입을 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것
-Time-millis , Decimal , Timestamp-millis , Date 등이 있다.
-
-
-
-## Kafka Monitoring
-Kafka I/O작업에서 비정상적인 패턴 발견되면, 디스크 I/O 메트릭과 로그를 확인하여 급격한 변화나 오류를 찾기가 먼저다.
-
-
-
-## Kafka KSQL
-KSQL의 배포 옵션에는 Headless Mode, Interactive Mode가 있음.
-Headless : SQL 파일 , 미리 작성하고 서버 시작 시 자동 실행
-Interactive : CLI 또는 REST API , 통해 대화형으로 실시간 쿼리 실행
-
-## Kafka Testing
-테스트를 위해  kafka-console-producer.sh와 kafka-console-consumer.sh 사용된다. 
-
-
-
 
 ## Kafka Streams
 Kafka Streams는 여러가지 집계 연산 기능을 제공한다.
@@ -249,8 +223,87 @@ reduce : 여러 개의 데이터들을 하나의 집계로 줄임(축약)
 windowed by, mapValues 또한 집계 operation이지만 필수는 아님
 
 
-## Kafka Configuration
-Kafka Quota란게 client(Producer, Consumer) 별로 클러스터에 대한 사용량 제한을 두는것,kafka-configs.sh 명령어로 관리
+
+## Kafka Streams
+- flatMapValues 연산 기능 : 각 입력 레코를 여러 출력 레코드로 변환
+  입력 Record : key="order123", value={items: [item1, item2, item3]}
+  출력: flatMapValues 연산을 통해
+  key="order123", value=item1
+  key="order123", value=item2
+  key="order123", value=item3
+
+- branch 연산 기능 : 조건에 따라 레코드를 여러 스트림으로 필터링
+  if else나 case when 처럼 분기를 태워서
+  하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄.
+
+## Kafka Streams
+Window는 Kafka Streams의 시간 범위별 집계 도구.
+KStream 객체를 groupByKey()로 그룹화한 후,
+.windowedBy()와 집계 메소드(aggregate, count, reduce)를 통해
+KTable로 결과가 나옴.
+필요에 따라 다른 Stream 또는 토픽으로 보냄.
+Sliding Window : 윈도우가 연속적으로 겹침 , 시간 범위 내 모든 레코드 포함
+Hopping Window : 일정 간겨으로 점프
+Tumbling Window : 겹침 없는 고정 윈도우
+
+
+## Kafka Streams
+카프카 스트림에서 모니터링 해야하는 핵심 Key는 process-rate, process-latency, commit-rate, commit-latency가 있다.
+데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
+
+
+## Kafka Streams
+"TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Confluent REST Proxy
+___
+REST Proxy는 HTTP/JSON 기반이라서 전송을 위해 base64필요
+프로듀서가 바이너리 데이터를 base64로 인코딩하여 HTTP/JSON으로 전송, REST API는 텍스트 기반이므로 바이너리 데이터를 base64로 인코딩해야함.
+REST Proxy가 base64 문자열을 디코딩하여 원본 바이트로 변환, Kafka토픽에 저장
+Kafka컨슈머는 바이너리 데이터 수신. 추가 디코딩 필요 없음.
+
+
+
+
+
+
+
+## Avro
+___
+Avro Logical Type이란 기본 타입을 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것
+Time-millis , Decimal , Timestamp-millis , Date 등이 있다.
+
+
+
+## Kafka KSQL
+KSQL의 배포 옵션에는 Headless Mode, Interactive Mode가 있음.
+Headless : SQL 파일 , 미리 작성하고 서버 시작 시 자동 실행
+Interactive : CLI 또는 REST API , 통해 대화형으로 실시간 쿼리 실행
+
+## Kafka Testing
+테스트를 위해  kafka-console-producer.sh와 kafka-console-consumer.sh 사용된다. 
+
+
+
+
 
 
 
@@ -284,9 +337,7 @@ Full Compatibility에서는 기본값(default)이 있는 필드만 추가하거�
 
 
 
-## Kafka Streams
-카프카 스트림에서 모니터링 해야하는 핵심 Key는 process-rate, process-latency, commit-rate, commit-latency가 있다.
-데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
+
 
 ## Kafka KSQL
 KSQL CLI를 통해, 쿼리를 작성하고 KSQL Stream을 만드는것.(SQL 기반)
@@ -302,53 +353,14 @@ SASL (Simple Authentication and Security Layer 카프카 인증 매커니즘 작
 ssl_handshake_rate (암호화딘 연결 설정 상태 모니터링)
 
 
-## Kafka Setup
-kafka의 재해 복구 계획에는 장애 발생시에도 데이터를 사용할 수 있도록 여러 위치에 데이터를 복제하는 전략이 포함되어야 합니다.
-- 여러 데이터 센터나 가용 영역에 복제 설정
-- 중요한 메타데이터 백업
-- 장애 조치와 복구 절차를 정기적으로 테스트 하여 신뢰성 확보
-
-## Kafka Streams
-- flatMapValues 연산 기능 : 각 입력 레코를 여러 출력 레코드로 변환
-입력 Record : key="order123", value={items: [item1, item2, item3]}
-출력: flatMapValues 연산을 통해
-  key="order123", value=item1
-  key="order123", value=item2
-  key="order123", value=item3
-
-- branch 연산 기능 : 조건에 따라 레코드를 여러 스트림으로 필터링
-if else나 case when 처럼 분기를 태워서 
-하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄.
-
-## Kafka Streams
-Window는 Kafka Streams의 시간 범위별 집계 도구.
-KStream 객체를 groupByKey()로 그룹화한 후,
-.windowedBy()와 집계 메소드(aggregate, count, reduce)를 통해
-KTable로 결과가 나옴.
-필요에 따라 다른 Stream 또는 토픽으로 보냄.
-Sliding Window : 윈도우가 연속적으로 겹침 , 시간 범위 내 모든 레코드 포함
-Hopping Window : 일정 간겨으로 점프
-Tumbling Window : 겹침 없는 고정 윈도우
-
-## Kafka Setup
-MirrorMaker는 Kafka클러스터의 데이터를 다른 Kafka클러스터로 복사하는 도구(백업용도, 지역별 서비스)
-MirrorMaker는 Kafka 설치 시 함께 제공되므로 별도 설치가 필요 없으며, 설정 파일 작성 후 스크립트를 실행하여 작동시키는 방식
-MirrorMaker 2.0 가장 중요한 업데이트 내용은
-1. 오프셋 동기화
-2. 향상된 처리량
-3. 자동화된 동기화
-
-## Kafka Configuration
-JVM Options 중 카비지 컬렉션이나, 힙메모리 사이즈 설정은 카프카 퍼포먼스를 강화할 수 있다. 특히 메모리 사용량이나 멈춤시간을 줄이는데 기여 가능함.
-
-
-
-## Kafka Configuration
-ex ) kafka-configs --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2
-를 통해 동적으로 변경가능 한 설정이 있음.
 
 
 
 
-## Kafka Streams
-"TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌
+
+
+
+
+
+
+
