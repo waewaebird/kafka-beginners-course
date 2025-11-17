@@ -143,56 +143,47 @@ ___
 1. kafka안에서 데이터를 실시간으로 변환/처리하는 라이브러리.
 2. kafka안에서 돌아가고 kafka를 사용하는 애플리케이션.
 3. 여러 토픽에서 데이터를 읽어 변환/집계하고, 결과를 다른 토픽으로 출력한다.
-4. Kafka Streams를 처리하는 두 가지 방식에는 DSL과 ProcessorAPI가 있음
-5. DSL은 간단한 코드로 데이터를 처리할 수 있음 filter(), map(), join() 등
-6. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현).
-
-
-
-Join이란 두 개 이상의 스트림/테이블 데이터를 결합하는것. SQL의 join과 비슷함.
-Stream은 계속 흐르는데, 매칭할 데이터를 기다려야(매칭 대기) 하니깐 상태저장이 필요 stateful하다.
-(the join operation in Kafka is stateful. It requires maintaining state information about the streams or tables being joined to handle the combination of data
-across different time windows or key matches. This statefulness allows Kafka to manage complex joins that integrate data arriving at different times,
-ensuring accurate and timely results in stream processing applications)
-
-
-
-
-
-## Kafka Streams
-___
-KafkaStreams의 핵심 확장성 모델은 => 수평적 확장 , 파티셔닝 + 인스턴스 분산 + 자동 리벨렁싱 + 선형적 확장성
-
-
-
-
- 
-
-
+4. Kafka Streams의 설정 키 상수에는 _CONFIG 접미사를 사용하는게 권장된다고 함. 더 나아가 Kafka Java API 네이밍 컨벤션.
+5. Kafka Streams 인스턴스를 하나 더 추가(수평적 확장) 하면 자동 리벌런싱이 발생하여 파티션이 인스턴스들에가 분산되고, 결과적으로 선형적 확장성을 얻는다. 
+6. Kafka Streams Instance 안에 Task 있음. 내부 처리단위 이고 Partition당 하나의 Task가 생성됨.
+7. Task : Partition , 1:1. 입력 토픽의 파티션 갯수만큼 Task 자동생성.
+8. 효과적인 Kafka 데이터 파이프 라인은 파티션 수와 kafka Streams의 인스턴스 수를 함께 조정.
+9. 파티션 증가 -> 병렬 처리 단위 증가 + 인스턴스 증가 -> 분산 처리 능력 향상 => 처리량 개선 및 처리 시간 단축
+10. 데이터를 바라보는 관점에서 KStream, KTable이 있음.
+11. KStream은 모든 레코드를 독립적인 이벤트로 인식. 이벤트 스트림. ex) 은행 거래 내역
+12. KTable은 현재 상태만 보존하는것. 상태 테이블. ex) 계좌 잔액
+13. Kafka Topic(Data Source)에서 KStream 또는 KTable로 읽어와서 처리/변환 후 다른 Topic으로 보내버림.
+10. Kafka Streams를 처리하는 두 가지 방식에는 DSL과 ProcessorAPI가 있음
+11. DSL은 간단한 코드로 데이터를 처리할 수 있음. 예를들어 filter(), map(), join() 등
+12. join : KStream/KTable을 결합하는 연산. SQL의 join과 비슷함. Stateful 연산으로 Task 내부 State Store에 매칭에 필요한 데이터를 저장함.
+13. KStream-KStream : 양쪽 데이터를 State Store에 저장하고 매칭 대기(Join Window설정 필수)
+14. KStream-KTable : KTable은 이미 저장되어 있어 즉시 조회 가능 
+15. KTable-KTable : 양쪽 모두 State Store에 저장되어 있음
+16. groupByKey : 레코드를 키별로 그룹화 (Stateful)
+17. reduce : 여러 개의 데이터들을 하나로 집계/축약 (Stateful)
+18. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful)
+19. mapValues : Key는 유지한채 Value만 원하는 형태로(toUpperCase, parsJson, ...) (Stateless)
 
 
 
 
 
 ## Kafka Streams
-___
-효과적인 Kafka 데이터 파이프 라인은
-1. Kafka Streams : 분산 스트림 처리를 가능하게 하여, 병렬 처리를 통해 대용량 데이터를 처리하는 능력을 향상
-2. 파티션 수 증가 : 병렬성을 향상시켜 더 많은 컨슈머가 동시에 데이터를 처리할 수 있도록 하며, 이를 통해 처리량을 개선하고 처리 시간을 단축.
+Kafka Streams는 여러가지 집계 연산 기능을 제공한다.
+집계 연산이란? 스트림으로 들어오는 다양한 데이터를 실시간으로 집계할 수 있는 연산기능 내장. 데이터베이스 집계 기능이랑 비슷하다고 생각되지만, Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
+Summing - Key별 합계
+Min/Max - Key별 최댓갑 최소값 계산
+Count - Key별 이벤트 횟수 세기
 
-## Kafka Streams
-___
-Kafka Streams API의 설정 키 상수에는 _CONFIG 접미사를 사용하는게 권장된다고 함. 더 나아가 Kafka Java API 네이밍 컨벤션.
 
-## Kafka Streams
-___
-Interactive Queries는 Kafka Streams 애플리케이션 로컬 상태 저장소를 실시간으로 조회할 수 있게 해주는 기능.
-Kafka Streams의 내부를 확인하기 위해. 개발자가 직접 REST API를 만들고 그 안에서 Interactive Queries 사용하여 내부 상태를 조회할 수 있음.
 
-## Kafka Streams
-___
-Kafka Streams의 병렬 처리 단위는 Partition. Partition당 하나의 Task가 생성됨.
-Source Topic 파티션 수 = Stream Task 수 (일대일)
+
+
+
+
+
+
+
 
 ## Kafka Streams
 ___
@@ -206,21 +197,7 @@ Event at 00:07 → [23:57-00:07] 윈도우 생성/업데이트
 이벤트마다 지속적으로 업데이트 됨.
 Session Windows : Gap이라는 비활동 시간으로 구분해서 사용자 활동 패턴 파악. 사용자 세션 기준이라 크기가 동적임. 비활동 기준
 
-## Kafka Streams
-Kafka Streams는 여러가지 집계 연산 기능을 제공한다.
-집계 연산이란? 스트림으로 들어오는 다양한 데이터를 실시간으로 집계할 수 있는 연산기능 내장. 데이터베이스 집계 기능이랑 비슷하다고 생각되지만, Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
-Summing - Key별 합계
-Min/Max - Key별 최댓갑 최소값 계산
-Count - Key별 이벤트 횟수 세기
 
-
-
-
-## Kafka Streams
-ex ) 판매 데이터로부터 누적 합계를 계산해야하는 경우 , Operation(연산자), Method라고도 부름. 이 메소드들은 자바에서 KTable 혹은 KStream 객체로 받을 수 있음.
-group by : 렠고드를 키별로 그룹화
-reduce : 여러 개의 데이터들을 하나의 집계로 줄임(축약)
-windowed by, mapValues 또한 집계 operation이지만 필수는 아님
 
 
 
@@ -246,14 +223,33 @@ Sliding Window : 윈도우가 연속적으로 겹침 , 시간 범위 내 모든 
 Hopping Window : 일정 간겨으로 점프
 Tumbling Window : 겹침 없는 고정 윈도우
 
+## Kafka Streams
+"TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌**
+
+
+
+
+
+
+
+. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현).
+
+
+
+
+## Kafka Streams
+___
+Interactive Queries는 Kafka Streams 애플리케이션 로컬 상태 저장소를 실시간으로 조회할 수 있게 해주는 기능.
+Kafka Streams의 내부를 확인하기 위해. 개발자가 직접 REST API를 만들고 그 안에서 Interactive Queries 사용하여 내부 상태를 조회할 수 있음.
+
+
 
 ## Kafka Streams
 카프카 스트림에서 모니터링 해야하는 핵심 Key는 process-rate, process-latency, commit-rate, commit-latency가 있다.
 데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
 
 
-## Kafka Streams
-"TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌
+
 
 
 
