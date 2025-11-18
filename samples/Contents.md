@@ -1,3 +1,49 @@
+ [핵심]
+    ├─ Kafka Broker (메시지 저장소)
+    ├─ Zookeeper / KRaft (메타데이터 관리)
+    ├─ Topic, Partition (데이터 구조)
+    └─ Producer, Consumer(Consumer Group) (클라이언트)
+
+ [데이터 수집/전송]
+    ├─ Producer Client API (직접 전송)
+    │   └─ Idempotent Producer, Transactions
+    ├─ Consumer Client API (직접 읽기)
+    │   └─ Rebalancing, Offset Management
+    └─ Kafka Connect (DB, 파일, API 연동)
+        ├─ Source Connector (데이터 가져오기)
+        └─ Sink Connector (데이터 보내기)
+
+ [스트림 처리]
+    ├─ Kafka Streams (Java 라이브러리)
+    │    ├─ Stateless 연산 (filter, map)
+    │    ├─ Stateful 연산 (aggregate, join)
+    │    └─ Interactive Queries (state 조회)
+    └─ ksqlDB (SQL로 스트림 처리)
+        ├─ Stream (이벤트)
+        ├─ Table (상태)
+        └─ Pull/Push Query
+
+ [스키마/데이터 관리]
+    ├─ Schema Registry (스키마 버전 관리)
+    ├─ Avro, Protobuf, JSON Schema
+    └─ Compatibility 체크
+
+ [접근성/편의성]
+    ├─ REST Proxy (HTTP로 Kafka 접근)
+    ├─ Kafka UI 도구들 (Confluent Control Center 등)
+    └─ CLI 도구들 (kafka-topics, kafka-console 등)
+
+ [모니터링/운영]
+    ├─ Metrics (JMX)
+    ├─ Kafka Manager, AKHQ 등
+    └─ Prometheus, Grafana 연동
+
+ [성능 최적화]
+    ├─ Compression (gzip, snappy, lz4, zstd)
+    ├─ Batching & Buffering
+    ├─ Partition 설계
+    └─ Replica 배치 전략
+
 - Kafka는 TCP 네트워크 프로토콜을 통해 이벤트를 통신하는, 서버와 클라이언트로 구성된 분산 시스템.
 
 ## Zookeeper
@@ -159,204 +205,99 @@ ___
 13. KStream-KStream : 양쪽 데이터를 State Store에 저장하고 매칭 대기(Join Window설정 필수)
 14. KStream-KTable : KTable은 이미 저장되어 있어 즉시 조회 가능 
 15. KTable-KTable : 양쪽 모두 State Store에 저장되어 있음
-16. groupByKey : 레코드를 키별로 그룹화 (Stateful)
-17. reduce : 여러 개의 데이터들을 하나로 집계/축약 (Stateful)
-18. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful)
-19. mapValues : Key는 유지한채 Value만 원하는 형태로(toUpperCase, parsJson, ...) (Stateless)
+16. 여러가지 집계 / 연산 기능을 제공. 스트림으로 들어오는 다양한 데이터를 실시간으로 집계 / 연산하는 기능. Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
+17. groupByKey : 레코드를 키별로 그룹화 (Stateful)
+18. mapValues : Key는 유지한채 Value만 원하는 형태로 변환 (toUpperCase, parsJson, ...) (Stateless)
+19. reduce : 여러 개의 데이터들을 하나로 집계/축약, 같은 타입으로만 리턴(Integer to Integer) (Stateful)
+20. aggregate + custom aggregator : key별 합계, 평균 등 커스텀 집계 로직을 정의하여 사용할 수 있음(sum, min, max), 다른 타입으로 리턴 가능(Integer to Object) (Stateful)
+21. count : key별 이벤트 횟수 세기
+22. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful). 데이터는 계속해서 흘러들오기 때문에 특정 시간 범위로 끊을때 사용함.
+23. 집계 : groupByKey() -> windowedBu() -> aggregate / count / reduce => 결과는 무조건 KTable로 나옴. (현재까지의 집계 결과, 집계는 누적된 상태를 유지)
+24. join : KStream - KStream join시 JoinWindow로 시간 범위 지정. Join 된 새로운 KStream 이벤트가 생성
+25. Tumbling Window : 고정시간 (분,시간,일 등) 단위로 시간겹침 없이 집계.(1-3, 4-6, 7-9, ...)
+26. Hopping Window : 고정크기 윈도우를 일정 간격으로 점프. 중첩시간 있음. (1-3, 3-5, 5-7, ...)
+27. Sliding Window : Join 전용. 이벤트 발생 시점 기준으로 앞뒤 시간 범위. 주문 : 03 , 결제 : 05 일 경우 01~05 사이 결제 찾아서 Join(매칭) 시킴 
+28. Session Window : 비활동 시간(Gap) 으로 구분해서 사용자 활동 패턴 추적. 활동 있으면 세션 유지, Gap시간 동안 비활동 시 세션 종료. 사용자 기준 세션이라 크기가 동적임. 
+29. flatMapValues : 하나의 key에 대해 value를 여러개로 쪼개는 무상태 변환 오퍼레이터 (Stateless).
+30. key="order123", value={items: [item1, item2, item3]} /  key="order123", value=item1 key="order123", value=item2 key="order123", value=item3 로 분리.
+31. branch : 하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄. (Stateless)
+32. "TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌\
+33. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현) DSL을 대체할 수 있음.
+34. Interactive Queries는 stateful 오퍼레이터를 통해 저장된 state store 내부를 조회하는 기능. REST API 방식으로 내부 상태를 조회할 수 있음.
+35. KafkaStreams는 to("Topic")을 통해 다른 토픽으로 결과를 전송하여 다운스트림 파이프라인을 구축하기도 하고, Interactive Queries를 통해 state store를 직접 조회하여 실시간 응답을 제공하기도 함.
+36. 토픽 방식이 더 표준적이고 안전함. Interactive Queries는 특수케이스용(디버깅, 임시 데이터, 초저지연 조회)
+37. Kafka Streams 모니터링 4가지 메트릭 데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
+38. Metrics 객체가 있음 streams.metrics(), metric 인스턴스의 이름을 체크하여 출력
+38. process-rate : 초당 처리 레코드 수
+39. process-latency : 레코드 하나 처리 시간
+40. commit-rate : 초당 커밋 횟수
+41. commit-latency : 커밋 작업에 걸리는 시간
 
 
-
-
-
-## Kafka Streams
-Kafka Streams는 여러가지 집계 연산 기능을 제공한다.
-집계 연산이란? 스트림으로 들어오는 다양한 데이터를 실시간으로 집계할 수 있는 연산기능 내장. 데이터베이스 집계 기능이랑 비슷하다고 생각되지만, Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
-Summing - Key별 합계
-Min/Max - Key별 최댓갑 최소값 계산
-Count - Key별 이벤트 횟수 세기
-
-
-
-
-
-
-
-
-
-
-
-## Kafka Streams
+## Kafka Connect
 ___
-Kafka Streams의 데이터는 계속해서 흘러들어오고 나가는것. 그래서 특정 기준 범위로 끊는 Window 타입이란게 있음.
-Tumbling Windows : 고정시간 분 , 시간 , 일일 통계등 겹치지 안흔 고정 시간. 시간기준
-Hopping Windows : 중첩시간 윈도우 10분 짜리 길이의 윈도우를 5분마다 이동. 겹치는 시간이 존재. 시간기준
-Sliding Windows : 최소 두 이벤트. 그 이벤트들이 발생할때의 시간차. 이벤트 기준
-Event at 00:01 → [23:51-00:01] 윈도우 생성/업데이트
-Event at 00:03 → [23:53-00:03] 윈도우 생성/업데이트
-Event at 00:07 → [23:57-00:07] 윈도우 생성/업데이트
-이벤트마다 지속적으로 업데이트 됨.
-Session Windows : Gap이라는 비활동 시간으로 구분해서 사용자 활동 패턴 파악. 사용자 세션 기준이라 크기가 동적임. 비활동 기준
+1. Kafka Connect는 Kafka와 다른 시스템(DB, 파일, API 등) 간에 데이터를 스트리밍하는 도구
+2. 플러그인형 커넥터와 작업(Task)으로 구성된 런타임을 띄우고, 커넥터 설정만으로 손쉽게 데이터 이동을 수행
+3. Kafka Connect Schema : Connector 개발 시 사용하기도 하지만, 기존 Connector 사용시에도 활용. 데이터의 타입 안전성을 보장하는 메타데이터.
+4. Source Connector : 데이터를 읽어서 Kafka로 전송할 때, 나중에 Sink가 올바르게 쓸 수 있도록 타입 정보를 Schema로 만들어 데이터와 함께 전달. Schema 없이 보내면 타입 안정성이 없어져 Sink에서 런타임 에러 발생 가능.
+5. Sink Connector : 받은 Schema를 보고 대상 시스템(DB 등)의 타입에 맞게 데이터를 변환하여 저장
+6. 스키마는 데이터 구조와 타입을 정의하며, 시스템 간 데이터 통합과 일관성 유지에 중요함
 
 
-
-
-
-## Kafka Streams
-- flatMapValues 연산 기능 : 각 입력 레코를 여러 출력 레코드로 변환
-  입력 Record : key="order123", value={items: [item1, item2, item3]}
-  출력: flatMapValues 연산을 통해
-  key="order123", value=item1
-  key="order123", value=item2
-  key="order123", value=item3
-
-- branch 연산 기능 : 조건에 따라 레코드를 여러 스트림으로 필터링
-  if else나 case when 처럼 분기를 태워서
-  하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄.
-
-## Kafka Streams
-Window는 Kafka Streams의 시간 범위별 집계 도구.
-KStream 객체를 groupByKey()로 그룹화한 후,
-.windowedBy()와 집계 메소드(aggregate, count, reduce)를 통해
-KTable로 결과가 나옴.
-필요에 따라 다른 Stream 또는 토픽으로 보냄.
-Sliding Window : 윈도우가 연속적으로 겹침 , 시간 범위 내 모든 레코드 포함
-Hopping Window : 일정 간겨으로 점프
-Tumbling Window : 겹침 없는 고정 윈도우
-
-## Kafka Streams
-"TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌**
-
-
-
-
-
-
-
-. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현).
-
-
-
-
-## Kafka Streams
+## Confluent Schema Registry
 ___
-Interactive Queries는 Kafka Streams 애플리케이션 로컬 상태 저장소를 실시간으로 조회할 수 있게 해주는 기능.
-Kafka Streams의 내부를 확인하기 위해. 개발자가 직접 REST API를 만들고 그 안에서 Interactive Queries 사용하여 내부 상태를 조회할 수 있음.
-
-
-
-## Kafka Streams
-카프카 스트림에서 모니터링 해야하는 핵심 Key는 process-rate, process-latency, commit-rate, commit-latency가 있다.
-데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+1. Schema Registry는 Kafka 생태계 전반에서 메시지 스키마(데이터 구조)를 중앙 관리하고 버전 관리를 제공하는 시스템. 데이터 타입 안전성과, 호환성을 높혀 준다.
+2. Producer/Consumer, Kafka Connect, Kafka Streams, ksqlDB 등 Kafka와 데이터를 주고받는 모든 컴포넌트에서 사용 가능
+3. 스키마 중앙 저장 및 버전 관리, 스키마 등록 및 검증, 조회 및 역직렬화, 호환선 검증 등.
+4. Forward Compatibility(전방) : 이전 스키마로 새 데이터 읽기 가능
+5. Backward Compatibility(후방) : 새 스키마로 이전 데이터 읽기 가능
+6. Full Compatibility(전체 호환성) : 둘다 만족. 양방향 호환성 보장을 위해 기본값(default)이 있는 필드만 추가하거나 제거할 수 있음.
+7. 독립 실행형 서버로 별도 실행하고, 클라이언트는 라이브러리를 통해 스키마를 자동으로 등록/조회. 메시지에는 스키마 ID만 포함되어 용량 절약
 
 
 ## Confluent REST Proxy
 ___
-REST Proxy는 HTTP/JSON 기반이라서 전송을 위해 base64필요
-프로듀서가 바이너리 데이터를 base64로 인코딩하여 HTTP/JSON으로 전송, REST API는 텍스트 기반이므로 바이너리 데이터를 base64로 인코딩해야함.
-REST Proxy가 base64 문자열을 디코딩하여 원본 바이트로 변환, Kafka토픽에 저장
-Kafka컨슈머는 바이너리 데이터 수신. 추가 디코딩 필요 없음.
+1. HTTP/REST API로 kafka에 접근
+2. KafkaClient 없이 웹기반으로 메시지를 토픽에 전송하거나, 토픽에서 읽을 수 있음.
+3. REST Proxy는 HTTP/JSON 기반이라서 전송을 위해 바이너리 데이터를 base64로 인코딩해야함.
+4. REST Proxy가 base64 문자열을 디코딩하여 원본 바이트로 변환, Kafka토픽에 저장
+5. Kafka컨슈머는 바이너리 데이터 수신. 추가 디코딩 필요 없음.
+6. 카프카 client는 더 빠른 바이너리 프로토콜을 사용하고 배치 처리 최적화가 되어 있음.
+7. 멱등성 확보, 트랜젝션 사용, 다양한 기능 사용에 있어서 더 편리하기 때문에 저빈도 또는 아주 간략한 프로젝트 아닌이상 client 쓰는게 훨씬 이점이 많음.
+8. kafka client (producer)에서 데이터를 Serializer로 바이너리로 변환하여 topic으로 send
 
 
-
-
-
+## Kafka KSQL
+___
+1. KSQL은 Kafka Streams를 SQL로 쉽게 다룰 수 있게 해주는 스트리밍 데이터 베이스
+2. Kafka Topic을 테이블 처럼 SQL로 쿼리로 조회/집계/조인.
+2. KSQL CLI를 통해, 쿼리를 작성하고 KSQL Stream을 만드는것.(SQL 기반)
+3. KSQL PORT : 8088 (KSQL CLI, REST API 상호작용을 포함.) (9092 : kafka broker , 2181 : zookeeper , 8083 : kafka connect , 8081 : Schema Registry)
+4. KSQL의 배포 모드에는 Headless Mode, Interactive Mode가 있음.
+5. Headless : SQL 파일을 미리 작성하고 서버 시작 시 자동 실행
+6. Interactive : CLI 또는 REST API , 통해 대화형으로 실시간 쿼리 실행
+7. Kafka Streams 라이브러리로 데이터 집계는 개발자 한정, 컴파일,빌드,배포 코드 수정 등 작업이 필요
+8. KSQL을 통해서 간단하게 데이터 연산/집계.
 
 
 ## Avro
 ___
-Avro Logical Type이란 기본 타입을 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것
-Time-millis , Decimal , Timestamp-millis , Date 등이 있다.
+1. Avro는 바이너리 데이터 직렬화 형식임. (protobuf, json ...)
+2. 스키마 기반, 바이너리 포맷, kafka 생태계에서 널리 사용.
+3. Avro Logical Type이란 기본 타입을(int, long, string 등) 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것.
+4. decimal(소수점), date(날짜), timestamp(시간) 등
+5. Apache Avro 공식 스펙에 따르면 논리 타입은 하이픈(-)으로 구분 (timestamp-millis, timestamp-micros, time-millis, local-timestamp-millis)
 
-
-
-## Kafka KSQL
-KSQL의 배포 옵션에는 Headless Mode, Interactive Mode가 있음.
-Headless : SQL 파일 , 미리 작성하고 서버 시작 시 자동 실행
-Interactive : CLI 또는 REST API , 통해 대화형으로 실시간 쿼리 실행
 
 ## Kafka Testing
-테스트를 위해  kafka-console-producer.sh와 kafka-console-consumer.sh 사용된다. 
-
-
-
-
-
-
-
-## Kafka KSQL
-KSQL PORT : 8088 (KSQL CLI, REST API 상호작용을 포함.) 
-9092 : kafka broker
-2181 : zookeeper
-8083 : kafka connect
-8081 : Schema Registry
-
-## Kafka Connect
-Kafka Connect Schema는 , Connector(Source, Sink)를 직접 개발할 때 사용함.
-Source Connector : 나중에 Sink가 쓸 수 있도록 타입 정보를 Schema로 만들어서 데이터와 함께 전달. Source가 보내지 않으면 타입 안정성이 없어져서 런타입 에러가 날 수 있음.
-Sink Connector : 받은 Schema를 보고 DB 타입에 맞게 저장
-스키마 정의서는 user Entity에 대한 구조와 데이터 타입, 데이터 통합과 지속성에 중대한, 업무 통압하는 동한 시스템에서 중요한
-
-
-
-## Avro
-timestamp_millis (Under Bar)
-
-## Kafka Connect
-Kafka Connect는 다른 시스템 간에 데이터를 스트리밍하는 도구이다.
-플러그인 형 커넥터와 작업으로 구성된 런타입을 띄우고, 커넥터 설정만으로 손쉽게 데이터 이동을 수행.
-
-
-
-## Confluent Schema Registry 
-Full Compatibility(전체 호환성): Backward Compatibility(후방) + Forward Compatibility(전방)
-Full Compatibility에서는 기본값(default)이 있는 필드만 추가하거나 제거할 수 있다.
-
-
-
-
-
-## Kafka KSQL
-KSQL CLI를 통해, 쿼리를 작성하고 KSQL Stream을 만드는것.(SQL 기반)
-
-
+___
+1. 테스트를 위해 kafka-console-producer.sh와 kafka-console-consumer.sh 사용된다. 
 
 
 ## Kafka Security
-Kafka 보안관련 모니터링은
-failed_authentication_total (실패한 인증 시도 모니터링)
-Access Control List (Access Control List 관리)
-SASL (Simple Authentication and Security Layer 카프카 인증 매커니즘 작동 여부 확인)
-ssl_handshake_rate (암호화딘 연결 설정 상태 모니터링)
-
-
-
-
-
-
-
-
-
-
-
-
-
+___
+1. Kafka 보안관련 모니터링 지표
+2. failed_authentication_total (실패한 인증 시도를 모니터링하는 지표로, 보안 이벤트 감지에 중요)
+3. Access Control List (Access Control List 관리)
+4. SASL (Simple Authentication and Security Layer 카프카 인증 매커니즘 작동 여부 확인)
+5. ssl_handshake_rate (암호화된 연결 설정 상태 모니터링)
