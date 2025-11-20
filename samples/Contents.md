@@ -1,42 +1,37 @@
  [핵심]
-    ├─ Kafka Broker (메시지 저장소)
-    ├─ Zookeeper / KRaft (메타데이터 관리)
-    ├─ Topic, Partition (데이터 구조)
-    └─ Producer, Consumer(Consumer Group) (클라이언트)
-
+    ├─ Kafka Broker 메시지 저장소 (9092 Port)
+    ├─ Zookeeper / KRaft 메타데이터 관리 (2181 Port)
+    ├─ Topic, Partition 데이터 구조
+    └─ Producer, Consumer(Consumer Group) 클라이언트
+ 
  [데이터 수집/전송]
-    ├─ Producer Client API (직접 전송)
+    ├─ Producer Client API
     │   └─ Idempotent Producer, Transactions
-    ├─ Consumer Client API (직접 읽기)
+    ├─ Consumer Client API
     │   └─ Rebalancing, Offset Management
-    └─ Kafka Connect (DB, 파일, API 연동)
-        ├─ Source Connector (데이터 가져오기)
-        └─ Sink Connector (데이터 보내기)
+    └─ Kafka Connect DB, 파일, API 연동 (8083 Port)
+        ├─ Source Connector
+        └─ Sink Connector
 
  [스트림 처리]
-    ├─ Kafka Streams (Java 라이브러리)
+    ├─ Kafka Streams Java 라이브러리
     │    ├─ Stateless 연산 (filter, map)
     │    ├─ Stateful 연산 (aggregate, join)
     │    └─ Interactive Queries (state 조회)
-    └─ ksqlDB (SQL로 스트림 처리)
-        ├─ Stream (이벤트)
-        ├─ Table (상태)
+    └─ KsqlDB SQL로 Stream 처리 (8088 Port)
+        ├─ Stream 이벤트
+        ├─ Table 상태
         └─ Pull/Push Query
 
  [스키마/데이터 관리]
-    ├─ Schema Registry (스키마 버전 관리)
+    ├─ Schema Registry 스키마 버전 관리 (8081 Port)
     ├─ Avro, Protobuf, JSON Schema
-    └─ Compatibility 체크
+    └─ Compatibility Forward, Backward, Full
 
  [접근성/편의성]
-    ├─ REST Proxy (HTTP로 Kafka 접근)
-    ├─ Kafka UI 도구들 (Confluent Control Center 등)
-    └─ CLI 도구들 (kafka-topics, kafka-console 등)
-
- [모니터링/운영]
-    ├─ Metrics (JMX)
-    ├─ Kafka Manager, AKHQ 등
-    └─ Prometheus, Grafana 연동
+    ├─ REST Proxy HTTP로 Kafka 접근 (8082 Port)
+    ├─ Kafka UI 도구들 
+    └─ CLI 도구들 kafka-topics, kafka-console 등.
 
  [성능 최적화]
     ├─ Compression (gzip, snappy, lz4, zstd)
@@ -44,13 +39,18 @@
     ├─ Partition 설계
     └─ Replica 배치 전략
 
+ [모니터링/운영]
+    ├─ Metrics (JMX)
+    ├─ Kafka Manager, AKHQ 등
+    └─ Prometheus, Grafana 연동
+
 - Kafka는 TCP 네트워크 프로토콜을 통해 이벤트를 통신하는, 서버와 클라이언트로 구성된 분산 시스템.
 
 ## Zookeeper
 ## Kraft
 ___
 1. kafka Cluster의 메타데이터 관리와 조정역할을 함.
-2. Zookeeper는 Apache Zookeper라는 외부 별도 시스템, Kraft는 자체 내장 메커니즘
+2. Apache Zookeeper라는 이름의 외부 별도 시스템, Kraft는 자체 내장 메커니즘
 3. ZooKeeper Node = ZooKeeper 서버 프로세스 (인스턴스) 그러나 보통 Node = 서버로 통용됨.
 4. ZooKeeper 앙상블에도 Zookeeper Node 즉 서버를 여러대 놓을 수 있음.
 5. ZooKeeper Quorum은 (total/2) + 1 개까지 남을 수 있음. 즉 정족수를 충족해야함. 충족하지 못한다면 Kafka 생태계가 점진적으로 마비됨.
@@ -70,11 +70,11 @@ ___
 
 ## Kafka Producers
 ___
-1. 프로듀서는 Kafka에 event를 입력하는 CLIENT.
+1. 프로듀서는 Kafka에 event를 입력하는 send Client.
 2. 프로듀서는 작성할 토픽을 지정하고, 토픽 내 파티션에 이벤트가 할당되는 방식을 제어.
-3. 프로듀서에서 효율적인 네트워크 전송을 위해 Serialization을 통해 메시지를 바이트 배열로 변환함. String, JSON, AVRO, Protobuf가 대표적인 직렬화 규칙(방식)
-4. batch.size : 동일한 파티션에 대한 레코드 배치의 최대 바이트 수. 배치가 이 크기에 도달하면 전송됨. 파티션마다 별도의 배치를 유지함. default:16kb 네트워크 오버헤드를 줄이고 처리량 효율성을 향상시킴. (전송 최적화 관련)
-5. linger.ms : 전송하기전 대기하는 시간. default:0ms이고 그 시간이 지나면 전송함. (전송 최적화 관련)
+3. 프로듀서에서 효율적인 네트워크 전송을 위해 Serialization을 통해 메시지를 바이트 배열로 변환함. (String, JSON, AVRO, Protobuf to Byte Array)
+4. batch.size : 동일한 파티션에 대한 레코드 배치의 최대 바이트 수. 배치가 이 크기에 도달하면 전송됨. default:16kb 네트워크 오버헤드를 줄이고 처리량 효율성을 향상시킴. (파티션마다 별도의 배치, 전송 최적화 관련)
+5. linger.ms : 전송하기전 대기하는 시간. default:0ms이고 그 시간이 지나면 전송함. (파티션마다 별도의 배치, 전송 최적화 관련)
 6. batch.size , linger.ms 먼저 만족하는 조건에 따라 전송
 7. Low Latency를 위해선 linger.ms , batch.size 모두 작게 , High Throughput을 위해선 linger.ms , batch.size 모두 크게
 8. buffer.memory : 메시지를 즉시 브로커로 보내기 전 내부 메모리에 잠깐 보관(배치로 모아서 보내거나, 네트워크 대기를 위해). 모든 파티션이 공유하는 전체 메모리. default : 32mb
@@ -85,66 +85,70 @@ ___
 13. producer의 callback은 프로듀서가 메시지를 전송 한 후 그 결과를 비동기적으로 받아서 처리할 수 있게 해주는 매커니즘.
 14. callback또한 acks설정 값에 따라 호출되는 시점이 달라진다.
 15. Idempotent Producer는 프로듀서와 브로커 간의 문제. 프로듀서가 토픽/파티션에 메시지를 쓸 때 중복을 방지하는 메커니즘. 
-16. 멱등성은 프로듀서가 재시도로 동일한 메시지를 여러 번 전송하더라고 메시지가 파티션에 정확히 한 번만 전달되도록 보장하여 중복을 방지.
+16. 멱등성은 프로듀서가 재시도로 동일한 메시지를 여러 번 전송하더라고 메시지가 파티션에 정확히 한 번만 전달되도록 보장하여 중복을 방지. 순서 보장.
 17. 프로듀서 측에서의 데이터 안정성 보장은 properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")해 달성 가능.
-18. properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")를 하면 acks=all retries > 0  max.in.flight.requests.per.connection ≤ 5 자동으로 설정된다.
+18. properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")를 하면 acks=all , retries > 0 , max.in.flight.requests.per.connection ≤ 5 자동으로 설정된다.
 19. 설정간 충돌이 발생하면 ConfigException이 발생
 20. request.timeout.ms : acks=1 , acks=all 일경우 브로커로부터 응답을 받기 위해 기다리는 시간. 시간내에 못받으면 재시도(다시 메시지 전송)함.
 
 
 ## Kafka Consumers
 ___
-1. 컨슈머는 Kafka에서 event를 읽는 CLIENT.
+1. 컨슈머는 Kafka에서 event를 읽는 poll Client.
 2. __consumer_offsets는 컨슈머가 직접 관리하는게 아님.
 3. Kafka Cluster 내부에 __consumer_offsets 내부 토픽이 있고 거기서 컨슈머 그룹의 offset을 전체 관리함.
 4. ConsumerGroup이라는 개념이 있음. 여러 컨슈머들의 논리적 그룹이고, group.id를 지정하여 집합으로 묶을 수 있음.
-5. 한 ConsumerGroup내에서 토픽의 각 파치션은 오직 한 멤버에 의해 소비됨.
+5. 한 ConsumerGroup내에서 토픽의 각 파티션은 오직 한 멤버에 의해 소비됨.
 6. 컨슈머 그룹에 새로운 멤버가 참여하거나, 컨슈머가 장애로 HeartBeat 전송에 실패하거나, Consuming하고 있는 파티션 갯수가 증가하면 Kafka Consumer Rebalance(컨슈머그룹의 멤버가 소비하는 토픽의 리밸런식)가 발생한다. 
 7. 각 컨슈머 그룹마다 Group Coordinator가 할당되어(해쉬 로직으로 선정) 해당 그룹의 offset을 관리함. Group별 관리를 통해 효율성과 신뢰성을 높임.
-8. Consumer Rebalance에는 Eager와 Cooperative가 있음
-9. Eager는 Stop the world를 발생시킴. 모든 파티션을 회수한 후 전체 재할당. 다운타임 발생.
-10. Cooperative 영향받는 파티션만 재할당. 점진적 리밸런싱으로 다운타임 최소화 
-11. auto.offset.reset : 초기 오프셋이 없거나, 현재 오프셋이 유효하지 않을 때 컨슈머가 어떻게 동작할지를 정의. (__consumer_offsets 내부 토픽에서 이 컨슈머 그룹의 오프셋 조회)
-12. auto.offset.reset : earliest - 파티션의 가장 처음부터, latest - 컨슈머가 시작되는 시점의 토픽/파티션에서 가장 최신 오프셋(LEO) 위치부터 읽기 시작, none - 예외를 발생시킴 (수동 처리)
-13. consumer.commitSync() : poll()메시지 처리 완료 후, 명시적으로 offset 수동커밋, 기본은 자동 커밋(enable.auto.commit=true) , Group Coordinator로부터 응답을 받기 전까지 다음 코드로 진행하지 않습니다. (blocking)
-14. subscribe() : Consumer Group에 참여. 파티션 자동할당. 리밸런싱 발생 consumer.subscribe(Arrays.asList("topic1", "topic2")); (props1.put("group.id", "group-A") 그룹 아이디 설정은 subscribe전에 해야함)
-15. assign() : 파티션 수동 할당. 그룹 참여 하지 않고 리밸런싱 발생 안함 consumer.assign(Arrays.asList(new TopicPartition("topic", 0)));
-16. seek() : consumer가 읽을 위치(offset)를 수동으로 지정. consumer.seek(topicPartition, offset); 실패한 메시지 재처리, 특정 메시지 반복 분석, 동일 데이터에 대한 비교 분석 위해 씀.
-17. poll전에 초기에 입력하거나 consumer.seek(partition0, 100);  , 에러 발생시 재처리 catch 블록에 적거나, 아무튼 컨슈머 로직의 poll 전에 넣어야 함. (여기서 부터 다시 poll 해라라는 의미)
+8. Consumer Group Coordinator는 cluster의 Broker 중 한대가 관리 역할을 맡는거임.
+9. 그룹 멤버 관리, Consumer Leader 선정, 파티션 할당 정보 다른 consumer 들에게 전달, consumer 상태 모니터링, 오프셋 저장관리, 리밸런스 관장/
+10. Consumer Leader는 consumer 인스턴 중 하나로, 파티션 할당 전략(예: RangeAssignor, RoundRobinAssignor 등) 에 따라 consumer에게 파티션을 할당하고 Group Coordinator에가 내용 전달.
+11. Consumer Rebalance에는 Eager와 Cooperative가 있음
+12. Eager는 Stop the world를 발생시킴. 모든 파티션을 회수한 후 전체 재할당. 다운타임 발생.
+13. Cooperative 영향받는 파티션만 재할당. 점진적 리밸런싱으로 다운타임 최소화 
+14. auto.offset.reset : 초기 오프셋이 없거나, 현재 오프셋이 유효하지 않을 때 컨슈머가 어떻게 동작할지를 정의. (__consumer_offsets 내부 토픽에서 이 컨슈머 그룹의 오프셋 조회)
+15. auto.offset.reset : earliest - 파티션의 가장 처음부터, latest - 컨슈머가 시작되는 시점의 토픽/파티션에서 가장 최신 오프셋(LEO) 위치부터 읽기 시작, none - 예외를 발생시킴 (수동 처리)
+16. consumer.commitSync() : poll()메시지 처리 완료 후, 명시적으로 offset 수동커밋, 기본은 자동 커밋(enable.auto.commit=true) , Group Coordinator로부터 응답을 받기 전까지 다음 코드로 진행하지 않습니다. (blocking)
+17. subscribe() : Consumer Group에 참여. 파티션 자동할당. 리밸런싱 발생 consumer.subscribe(Arrays.asList("topic1", "topic2")); (props1.put("group.id", "group-A") 그룹 아이디 설정은 subscribe전에 해야함)
+18. assign() : 파티션 수동 할당. 그룹 참여 하지 않고 리밸런싱 발생 안함 consumer.assign(Arrays.asList(new TopicPartition("topic", 0)));
+19. seek() : consumer가 읽을 위치(offset)를 수동으로 지정. consumer.seek(topicPartition, offset); 실패한 메시지 재처리, 특정 메시지 반복 분석, 동일 데이터에 대한 비교 분석 위해 씀.
+20. poll전에 초기에 입력하거나 consumer.seek(partition0, 100);  , 에러 발생시 재처리 catch 블록에 적거나, 아무튼 컨슈머 로직의 poll 전에 넣어야 함. (여기서 부터 다시 poll 해라라는 의미)
 
 
 ## Kafka Core Concepts
 ___
-0. 아파치 카프카는 real-time 데이터를 처리하고, 스트리밍 기능이 가능하도록 설계되어 시스템과 애플리케이션 간에 안정적인 데이터 전송을 제공.
-0. 실시간 대용량 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.(DataPipeLine : 데이터 전달 통로. 데이터 소스,수집,가공/변환,저장,분석, 활용 등 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템)
-1. Offset은 보통 파티션 내 데이터의 고유한 순번을 말함. 메시지가 토픽에 생설될 때 브로커가 자동 할당함.(consumer_offset은 컨슈머가 어디까지 읽었는지 추적하는 값)
-2. Kafka는 .index 파일을 사용해 메시지를 빠르게 찾음. 오프셋-> 파일 위치 매핑 정보를 저장하여 전체 파일을 스캔하지 않고 바로 원하는 위치로 점프 가능 
-3. 토픽의 실제 메시지 데이터는 .log파일에 들어가 있고 그와 매핑되는 .index 파일도 있음(00000000000000001000.log , 00000000000000001000.index)
-4. 특정 offset의 파일을 찾을때는 파일명으로 먼저 세그먼트를 선택하고, .index파일에서 물리적 위치를 찾아 .log에 있는 메시지 데이터를 찾을 수 있음. 
-5. 주키퍼 의존성을 지우기 위해 Kraft의 Quorum Controller가 있음. 클러스터의 메타데이터, 파티션 리더쉽, 멤버쉽 변화를 관리.
-6. Kraft모드에서는 Controller가 QuorumController Cluster로 여러대 구성돼 있음. ControllerBroker가 QuorumController로 진화함.
-7. 역할은 동일 파티션 배치, 리더 선출, ISR 관리 등.
-8. 단일 Controller가 아닌 Quorum(정족수) 기반, 그 중 실제 일하는 Active Leader가 있고, 장애 시 하나가 리더로 승격
-9. 장애 복구시 Zookeeper에서는 재선출이 필요해서 느리지만, Kraft에서는 빠르게 증시 승격
-10. Producer에서 메시지 압축을 통해 네트워크 효율과, Broker 저장소 사용에 있어서 향상을 줌. 하지만 Producer의 압축과정, Consumer의 해제과정에서 CPU자원의 추가 소모가 들어감.
-11. Partition수를 증가시켜 컨슈머그룹에서 컨슈머를 할당하면 더 많은 병렬처리가 가능하지만 감소는 불가능 함. 
-12. 파티션 수 증가 시 Key의 파티션 매핑이 변경되어 동일 Key의 메시지가 다른 파티션으로 분산되며, 이는 순서 보장을 깨뜨림.
-13. 일반적인 Exactly-Once 는 Producer to Broker Exactly-Once , 이것은 Producer가 Broker에게 정확히 한번 쓰기 보장.
-14. props.put("enable.idempotence", "true");
-15. props.put("acks", "all");
-16. props.put("retries", Integer.MAX_VALUE);
-17. props.put("max.in.flight.requests.per.connection", 5); 
-18. Kafka Stream에서 주로 사용하는 Exactly-Once는 읽기 -> 처리 -> 쓰기 전체를 원자적으로 처리, Consumer offset commit까지 Transaction으로 포함.
-19. props.put("enable.idempotence", "true");
-20. props.put("transactional.id", "order-service-producer"); // Producer 인스턴스 하나당 하나의 고유한 값.
-21. 읽기 처리 쓰기를 하나의 Transaction으로 묶음. producer.beginTransaction(); producer.send(msg); producer.commitTransaction(); //여기서 트랜잭션 끝
-22. log.cleanup.policy : compact로 설정하면 LogCompaction 활성화 되고, Producer에서 보낸 같은 Key에 대한 최신값만 유지하고 이전 값들은 삭제.
-23. log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정. 낮을 수록 더 자주 트리거 됨
-24. log.cleaner.backoff.ms=15000 Cleaner 스레드 체크 간격 (기본 15초).
-25. log.cleanup.policy : delete 시간/크기 기반 삭제(기본값) , 기간은 7일 bytes는 기본은 무제한.
-26. log.retention.check.interval.ms : 설정 시간마다 백그라운드 스레드가 실행되고 로그 세그먼트 확인(compact, delete, compact+delete)
-27. log.retention.hours : 로그 보관 기간 (기본 168시간 = 7일).  이 시간을 초과한 세그먼트 삭제. 
-28. log.retention.bytes : 파티션당 최대 로그 크기 (기본 -1 = 무제한). 이 크기를 초과하면 가장 오래된 세그먼트부터 삭제.
+1. 아파치 카프카는 real-time 데이터를 처리하고, 스트리밍 기능이 가능하도록 설계되어 시스템과 애플리케이션 간에 안정적인 데이터 전송을 제공.
+2. 실시간 대용량 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.(DataPipeLine : 데이터 전달 통로. 데이터 소스,수집,가공/변환,저장,분석, 활용 등 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템)
+3. Offset은 보통 파티션 내 데이터의 고유한 순번을 말함. 메시지가 토픽에 생설될 때 브로커가 자동 할당함.(consumer_offset은 컨슈머가 어디까지 읽었는지 추적하는 값)
+4. Kafka는 .index 파일을 사용해 메시지를 빠르게 찾음. 오프셋-> 파일 위치 매핑 정보를 저장하여 전체 파일을 스캔하지 않고 바로 원하는 위치로 점프 가능 
+5. 토픽의 실제 메시지 데이터는 .log파일에 들어가 있고 그와 매핑되는 .index 파일도 있음(00000000000000001000.log , 00000000000000001000.index)
+6. 특정 offset의 파일을 찾을때는 파일명으로 먼저 세그먼트를 선택하고, .index파일에서 물리적 위치를 찾아 .log에 있는 메시지 데이터를 찾을 수 있음. 
+7. 주키퍼 의존성을 지우기 위해 Kraft의 Quorum Controller가 있음. 클러스터의 메타데이터, 파티션 리더쉽, 멤버쉽 변화를 관리.
+8. Kraft모드에서는 Controller가 QuorumController Cluster로 여러대 구성돼 있음. ControllerBroker가 QuorumController로 진화함.
+9. 역할은 동일 파티션 배치, 리더 선출, ISR 관리 등.
+10. 단일 Controller가 아닌 Quorum(정족수) 기반, 그 중 실제 일하는 Active Leader가 있고, 장애 시 다른 하나가 리더로 승격 (가장 최신의 로그를 가진 노드가 리더)
+11. 장애 복구시 Zookeeper에서는 재선출이 필요해서 느리지만, Kraft에서는 빠르게 증시 승격
+12. Producer에서 메시지 압축을 통해 네트워크 효율과, Broker 저장소 사용에 있어서 향상을 줌. 하지만 Producer의 압축과정, Consumer의 해제과정에서 CPU자원의 추가 소모가 들어감.
+13. Partition수를 증가시켜 컨슈머그룹에서 컨슈머를 할당하면 더 많은 병렬처리가 가능하지만 감소는 불가능 함. 
+14. 파티션 수 증가 시 Key의 파티션 매핑이 변경되어 동일 Key의 메시지가 다른 파티션으로 분산되며, 이는 순서 보장을 깨뜨림.
+15. 일반적인 Exactly-Once 는 Producer to Broker Exactly-Once , 이것은 Producer가 Broker에게 정확히 한번 쓰기 보장.
+16. props.put("enable.idempotence", "true");
+17. props.put("acks", "all");
+18. props.put("retries", Integer.MAX_VALUE); 
+19. props.put("max.in.flight.requests.per.connection", 5); 
+20. Kafka Stream에서 주로 사용하는 Exactly-Once는 읽기 -> 처리 -> 쓰기 전체를 원자적으로 처리, Consumer offset commit까지 Transaction으로 포함.
+21. props.put(StreamsConfig.APPLICATION_ID_CONFIG, "order-service");
+22. props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+23. 위 설정을 통해 Kafka Streams에서 Exactly-Once를 보장
+24. Topic에서 메시지 읽기, 처리 로직(집계/통계), toTopic에 쓰기 이 작업이 transaction으로 묶이고 중간에 장애가 발생하면 전체가 롤백하여 중복 결과 생성 방지 
+25. log.cleanup.policy : compact로 설정하면 LogCompaction 활성화 되고, Producer에서 보낸 같은 Key에 대한 최신값만 유지하고 이전 값들은 삭제. 
+26. log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정. 낮을 수록 더 자주 트리거 됨 
+27. log.cleaner.backoff.ms=15000 Cleaner 스레드 체크 간격 (기본 15초). 
+28. log.cleanup.policy : delete 시간/크기 기반 삭제(기본값) , 기간은 7일 bytes는 기본은 무제한. 
+29. log.retention.check.interval.ms : 설정 시간마다 백그라운드 스레드가 실행되고 로그 세그먼트 확인(compact, delete, compact+delete)
+30. log.retention.hours : 로그 보관 기간 (기본 168시간 = 7일).  이 시간을 초과한 세그먼트 삭제. 
+31. log.retention.bytes : 파티션당 최대 로그 크기 (기본 -1 = 무제한). 이 크기를 초과하면 가장 오래된 세그먼트부터 삭제.
 
 
 ## Kafka Configuration
@@ -167,15 +171,15 @@ ___
 3. MirrorMaker는 Kafka 설치 시 함께 제공되므로 별도 설치가 필요 없고, 설정 파일 작성 후 스크립트를 실행하여 작동시키는 방식.
 4. 별도의 MirrorMaker를 두고 bin/connect-mirror-maker.sh mm2.properties 명령어를 통해서 실행
 5. Zookeeper, Kraft 또는 별도의 설정을 복사하는건 아니고, 토픽의 메시지 데이터(세그먼트)만 복사한다.
-4. MirrorMaker 2.0 가장 중요한 업데이트 내용은
-5. Kafka Connect 기반 아키텍처로 전환 (확장성/안정성 향상)
-6. Consumer Group 오프셋 자동 동기화 (재해 복구 지원)
-7. 정규식 기반 토픽 자동 복제
-8. 양방향 복제 지원 (Active-Active)
-9. kafka의 재해 복구 계획에는 장애 발생시에도 데이터를 사용할 수 있도록 여러 위치에 데이터를 복제하는 전략이 포함되어야 합니다. 
-10. 여러 데이터 센터나 가용 영역에 복제 설정
-11. 중요한 메타데이터 백업
-12. 장애 조치와 복구 절차를 정기적으로 테스트 하여 신뢰성 확보 
+6. MirrorMaker 2.0 가장 중요한 업데이트 내용은
+7. Kafka Connect 기반 아키텍처로 전환 (확장성/안정성 향상)
+8. Consumer Group 오프셋 자동 동기화 (재해 복구 지원)
+9. 정규식 기반 토픽 자동 복제
+10. 양방향 복제 지원 (Active-Active)
+11. kafka의 재해 복구 계획에는 장애 발생시에도 데이터를 사용할 수 있도록 여러 위치에 데이터를 복제하는 전략이 포함되어야 합니다. 
+12. 여러 데이터 센터나 가용 영역에 복제 설정
+13. 중요한 메타데이터 백업 
+14. 장애 조치와 복구 절차를 정기적으로 테스트 하여 신뢰성 확보 
 
 
 ## Kafka Monitoring
@@ -190,9 +194,9 @@ ___
 2. kafka안에서 돌아가고 kafka를 사용하는 애플리케이션.
 3. 여러 토픽에서 데이터를 읽어 변환/집계하고, 결과를 다른 토픽으로 출력한다.
 4. Kafka Streams의 설정 키 상수에는 _CONFIG 접미사를 사용하는게 권장된다고 함. 더 나아가 Kafka Java API 네이밍 컨벤션.
-5. Kafka Streams 인스턴스를 하나 더 추가(수평적 확장) 하면 자동 리벌런싱이 발생하여 파티션이 인스턴스들에가 분산되고, 결과적으로 선형적 확장성을 얻는다. 
-6. Kafka Streams Instance 안에 Task 있음. 내부 처리단위 이고 Partition당 하나의 Task가 생성됨.
-7. Task : Partition , 1:1. 입력 토픽의 파티션 갯수만큼 Task 자동생성.
+5. Kafka Streams 인스턴스를 하나 더 추가(수평적 확장)하면 자동 리밸런싱이 발생하여 Task들이 인스턴스들에 재분배되고, 결과적으로 선형적 확장성을 얻는다.
+6. Kafka Streams Instance 안에 Task가 있음. Task는 내부 처리 단위이고, Partition당 하나의 Task가 생성됨. 하나의 Instance는 여러 Task를 처리할 수 있음.
+7. Task : Partition , 1:1. 입력 토픽의 파티션 갯수만큼 Task 자동생성. 여러 토픽의 파티션을 담당할 수 있으나 권장은 50~200개 파티션이라 한다.
 8. 효과적인 Kafka 데이터 파이프 라인은 파티션 수와 kafka Streams의 인스턴스 수를 함께 조정.
 9. 파티션 증가 -> 병렬 처리 단위 증가 + 인스턴스 증가 -> 분산 처리 능력 향상 => 처리량 개선 및 처리 시간 단축
 10. 데이터를 바라보는 관점에서 KStream, KTable이 있음.
@@ -210,7 +214,7 @@ ___
 18. mapValues : Key는 유지한채 Value만 원하는 형태로 변환 (toUpperCase, parsJson, ...) (Stateless)
 19. reduce : 여러 개의 데이터들을 하나로 집계/축약, 같은 타입으로만 리턴(Integer to Integer) (Stateful)
 20. aggregate + custom aggregator : key별 합계, 평균 등 커스텀 집계 로직을 정의하여 사용할 수 있음(sum, min, max), 다른 타입으로 리턴 가능(Integer to Object) (Stateful)
-21. count : key별 이벤트 횟수 세기
+21. count : key별 이벤트 횟수 세기 (Stateful)
 22. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful). 데이터는 계속해서 흘러들오기 때문에 특정 시간 범위로 끊을때 사용함.
 23. 집계 : groupByKey() -> windowedBu() -> aggregate / count / reduce => 결과는 무조건 KTable로 나옴. (현재까지의 집계 결과, 집계는 누적된 상태를 유지)
 24. join : KStream - KStream join시 JoinWindow로 시간 범위 지정. Join 된 새로운 KStream 이벤트가 생성
@@ -221,50 +225,58 @@ ___
 29. flatMapValues : 하나의 key에 대해 value를 여러개로 쪼개는 무상태 변환 오퍼레이터 (Stateless).
 30. key="order123", value={items: [item1, item2, item3]} /  key="order123", value=item1 key="order123", value=item2 key="order123", value=item3 로 분리.
 31. branch : 하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄. (Stateless)
-32. "TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌\
+32. "TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌.
 33. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현) DSL을 대체할 수 있음.
 34. Interactive Queries는 stateful 오퍼레이터를 통해 저장된 state store 내부를 조회하는 기능. REST API 방식으로 내부 상태를 조회할 수 있음.
 35. KafkaStreams는 to("Topic")을 통해 다른 토픽으로 결과를 전송하여 다운스트림 파이프라인을 구축하기도 하고, Interactive Queries를 통해 state store를 직접 조회하여 실시간 응답을 제공하기도 함.
 36. 토픽 방식이 더 표준적이고 안전함. Interactive Queries는 특수케이스용(디버깅, 임시 데이터, 초저지연 조회)
 37. Kafka Streams 모니터링 4가지 메트릭 데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
-38. Metrics 객체가 있음 streams.metrics(), metric 인스턴스의 이름을 체크하여 출력
+38. Metrics 객체가 있음 streams.metrics(), metric 인스턴스의 이름을 체크하여 출력.
 38. process-rate : 초당 처리 레코드 수
 39. process-latency : 레코드 하나 처리 시간
 40. commit-rate : 초당 커밋 횟수
 41. commit-latency : 커밋 작업에 걸리는 시간
 
 
-## Kafka Connect
-___
-1. Kafka Connect는 Kafka와 다른 시스템(DB, 파일, API 등) 간에 데이터를 스트리밍하는 도구
-2. 플러그인형 커넥터와 작업(Task)으로 구성된 런타임을 띄우고, 커넥터 설정만으로 손쉽게 데이터 이동을 수행
-3. Kafka Connect Schema : Connector 개발 시 사용하기도 하지만, 기존 Connector 사용시에도 활용. 데이터의 타입 안전성을 보장하는 메타데이터.
-4. Source Connector : 데이터를 읽어서 Kafka로 전송할 때, 나중에 Sink가 올바르게 쓸 수 있도록 타입 정보를 Schema로 만들어 데이터와 함께 전달. Schema 없이 보내면 타입 안정성이 없어져 Sink에서 런타임 에러 발생 가능.
-5. Sink Connector : 받은 Schema를 보고 대상 시스템(DB 등)의 타입에 맞게 데이터를 변환하여 저장
-6. 스키마는 데이터 구조와 타입을 정의하며, 시스템 간 데이터 통합과 일관성 유지에 중요함
-
-
 ## Confluent Schema Registry
 ___
 1. Schema Registry는 Kafka 생태계 전반에서 메시지 스키마(데이터 구조)를 중앙 관리하고 버전 관리를 제공하는 시스템. 데이터 타입 안전성과, 호환성을 높혀 준다.
-2. Producer/Consumer, Kafka Connect, Kafka Streams, ksqlDB 등 Kafka와 데이터를 주고받는 모든 컴포넌트에서 사용 가능
-3. 스키마 중앙 저장 및 버전 관리, 스키마 등록 및 검증, 조회 및 역직렬화, 호환선 검증 등.
-4. Forward Compatibility(전방) : 이전 스키마로 새 데이터 읽기 가능
-5. Backward Compatibility(후방) : 새 스키마로 이전 데이터 읽기 가능
-6. Full Compatibility(전체 호환성) : 둘다 만족. 양방향 호환성 보장을 위해 기본값(default)이 있는 필드만 추가하거나 제거할 수 있음.
-7. 독립 실행형 서버로 별도 실행하고, 클라이언트는 라이브러리를 통해 스키마를 자동으로 등록/조회. 메시지에는 스키마 ID만 포함되어 용량 절약
-
+2. 독립 실행형 서버로 별도 실행하고, 클라이언트는 라이브러리를 통해 스키마를 자동으로 등록/조회. 메시지에는 스키마 ID만 포함되어 용량 절약
+3. schema-registry-start /etc/schema-registry/schema-registry.properties로 실행
+4. props.put("schema.registry.url", "http://localhost:8081"); 로 등록해줘야함. 
+5. Producer/Consumer, Kafka Connect, Kafka Streams, ksqlDB 등 Kafka와 데이터를 주고받는 모든 컴포넌트에서 사용 가능
+6. 스키마 중앙 저장 및 버전 관리, 스키마 등록 및 검증, 조회 및 역직렬화, 호환선 검증 등. 
+7. Forward Compatibility(전방) : 이전 스키마로 새 데이터 읽기 가능. Producer 먼저 업그레이드 해야함.
+8. 이전 스키마가 새 데이터를 읽어야 함. Producer과 과거 스키마로 보내도 Consumer는 이해하니깐 Producer먼저
+9. Backward Compatibility(후방) : 새 스키마로 이전 데이터 읽기 가능. 최신 스키마에 추가된 필드는 Default로 채워집니다. Consumer 먼저 업그레이드 해야함
+10. 새 스키마가 이전 데이터를 읽어야 함. 호환성이 보장하는 방향으로 데이터가 흐르도록... Consumer 먼저
+11. Full Compatibility(전체 호환성) : 둘다 만족. 양방향 호환성 보장을 위해 기본값(default)이 있는 필드만 추가하거나 제거할 수 있음.
+   
 
 ## Confluent REST Proxy
 ___
-1. HTTP/REST API로 kafka에 접근
-2. KafkaClient 없이 웹기반으로 메시지를 토픽에 전송하거나, 토픽에서 읽을 수 있음.
-3. REST Proxy는 HTTP/JSON 기반이라서 전송을 위해 바이너리 데이터를 base64로 인코딩해야함.
-4. REST Proxy가 base64 문자열을 디코딩하여 원본 바이트로 변환, Kafka토픽에 저장
-5. Kafka컨슈머는 바이너리 데이터 수신. 추가 디코딩 필요 없음.
-6. 카프카 client는 더 빠른 바이너리 프로토콜을 사용하고 배치 처리 최적화가 되어 있음.
-7. 멱등성 확보, 트랜젝션 사용, 다양한 기능 사용에 있어서 더 편리하기 때문에 저빈도 또는 아주 간략한 프로젝트 아닌이상 client 쓰는게 훨씬 이점이 많음.
-8. kafka client (producer)에서 데이터를 Serializer로 바이너리로 변환하여 topic으로 send
+1. HTTP/REST API로 kafka에 접근할 수 있는 Restful Interface.
+2. Kafka Client 없이 HTTP 기반으로 메시지를 토픽에 전송하거나, 토픽에서 읽을 수 있음.
+3. Http Client : Producer측, Consumer측 역할로 사용할 수 있음. request를 날릴 수 있는 postMan, Web Application, Curl등이 될 수 있음.
+4. Rest Proxy는 독립 실행형 서버 애플리케이션 (confluent-rest-proxy-start /etc/kafka-rest/kafka-rest.properties 로 실행 할 수 있음) 8082
+5. Producer Http Client : Rest Proxy서버에 바이너리 데이터를 base64로 인코딩하여 전송
+6. Rest Proxy : base64문자열을 디코딩 하여 바이트로 변환. Kafka Topic에 데이터 저장
+7. Rest Proxy : Kafka Topic에서 바이너리 데이터를 읽어서 base64인코딩 및 전송
+7. Consumer Http Client : base64데이터를 받아 디코딩하여 원본 바이너리로 복원
+8. HTTP Client → base64 인코딩 → REST Proxy → base64 디코딩 → Kafka Topic(바이너리) → REST Proxy → base64 인코딩 → HTTP Client
+9. Kafka client는 더 빠른 바이너리 프로토콜을 사용하고 배치 처리 최적화가 되어 있음.
+10. 멱등성 확보, 트랜젝션 사용, 다양한 기능 사용에 있어서 더 편리하기 때문에 저빈도 또는 아주 간략한 프로젝트 아닌이상 client 쓰는게 훨씬 이점이 많음.
+
+
+## Kafka Connect
+___
+1. Kafka Connect는 Kafka와 다른 시스템(DB, 파일, API 등) 간에 데이터를 스트리밍하는 도구
+2. 플러그인형 커넥터와 작업(Task)으로 구성된 런타임을 띄우고, 커넥터 설정만으로 손쉽게 데이터 이동을 수행 8083
+3. connect-standalone connect-standalone.properties connector1.properties 실행
+4. Kafka Connect Schema : Connector 개발 시 사용하기도 하지만, 기존 Connector 사용시에도 활용. 데이터의 타입 안전성을 보장하는 메타데이터.
+5. Source Connector : 데이터를 읽어서 Kafka로 전송할 때, 나중에 Sink가 올바르게 쓸 수 있도록 타입 정보를 Schema로 만들어 데이터와 함께 전달. Schema 없이 보내면 타입 안정성이 없어져 Sink에서 런타임 에러 발생 가능.
+6. Sink Connector : 받은 Schema를 보고 대상 시스템(DB 등)의 타입에 맞게 데이터를 변환하여 저장
+7. 스키마는 데이터 구조와 타입을 정의하며, 시스템 간 데이터 통합과 일관성 유지에 중요함
 
 
 ## Kafka KSQL
@@ -272,18 +284,18 @@ ___
 1. KSQL은 Kafka Streams를 SQL로 쉽게 다룰 수 있게 해주는 스트리밍 데이터 베이스
 2. Kafka Topic을 테이블 처럼 SQL로 쿼리로 조회/집계/조인.
 2. KSQL CLI를 통해, 쿼리를 작성하고 KSQL Stream을 만드는것.(SQL 기반)
-3. KSQL PORT : 8088 (KSQL CLI, REST API 상호작용을 포함.) (9092 : kafka broker , 2181 : zookeeper , 8083 : kafka connect , 8081 : Schema Registry)
+3. KSQL PORT : 8088 (KSQL CLI, REST API 상호작용을 포함.)
 4. KSQL의 배포 모드에는 Headless Mode, Interactive Mode가 있음.
 5. Headless : SQL 파일을 미리 작성하고 서버 시작 시 자동 실행
 6. Interactive : CLI 또는 REST API , 통해 대화형으로 실시간 쿼리 실행
-7. Kafka Streams 라이브러리로 데이터 집계는 개발자 한정, 컴파일,빌드,배포 코드 수정 등 작업이 필요
-8. KSQL을 통해서 간단하게 데이터 연산/집계.
+7. Kafka Streams 라이브러리 데이터 집계는 개발자 한정, 컴파일,빌드,배포 코드 수정 등 작업이 필요. 반면 KSQL을 통해서 간단하게 데이터 연산/집계.
 
 
 ## Avro
 ___
 1. Avro는 바이너리 데이터 직렬화 형식임. (protobuf, json ...)
 2. 스키마 기반, 바이너리 포맷, kafka 생태계에서 널리 사용.
+3. "type" : "record" 라는 key-value가 필수임. "fields" 배열안에 여러 필드가 있음.
 3. Avro Logical Type이란 기본 타입을(int, long, string 등) 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것.
 4. decimal(소수점), date(날짜), timestamp(시간) 등
 5. Apache Avro 공식 스펙에 따르면 논리 타입은 하이픈(-)으로 구분 (timestamp-millis, timestamp-micros, time-millis, local-timestamp-millis)
