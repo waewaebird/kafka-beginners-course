@@ -610,9 +610,9 @@ ___
 This schema excerpt is an example of which schema format?
 package com.mycorp.mynamespace;
 message SampleRecord {
-int32 Stock = 1;
-double Price = 2;
-string Product_Name = 3;
+    int32 Stock = 1;
+    double Price = 2;
+    string Product_Name = 3;
 }
 - [ ] A. Avro
 - [ ] B. Protobuf
