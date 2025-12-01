@@ -44,7 +44,8 @@
     ├─ Kafka Manager, AKHQ 등
     └─ Prometheus, Grafana 연동
 
-- Kafka는 TCP 네트워크 프로토콜을 통해 이벤트를 통신하는, 서버와 클라이언트로 구성된 분산 시스템.
+- 여러 서버에 이벤트를 저장하고, 전달하는 분산 메시지 시스템.
+- Kafka Protocol, TCP 프로토콜을 통해 이벤트를 통신하는. 서버(Broker, Zookeeper/Kraft) , 클라이언트(Producer, Consumer, Etc) 구조.
 
 ## Zookeeper
 ## Kraft
@@ -54,11 +55,6 @@ ___
 3. ZooKeeper Node = ZooKeeper 서버 프로세스 (인스턴스) 그러나 보통 Node = 서버로 통용됨.
 4. ZooKeeper 앙상블에도 Zookeeper Node 즉 서버를 여러대 놓을 수 있음.
 5. ZooKeeper Quorum은 (total/2) + 1 개까지 남을 수 있음. 즉 정족수를 충족해야함. 충족하지 못한다면 Kafka 생태계가 점진적으로 마비됨.
-6. ZooKeeper 의존성을 지우기 위해 Kraft의 Quorum Controller가 있음. 클러스터의 메타데이터, 파티션 리더쉽, 멤버쉽 변화를 관리.
-7. Kraft모드에서는 Controller가 QuorumController Cluster로 여러대 구성돼 있음. ControllerBroker가 QuorumController로 진화함.
-8. 역할은 동일 파티션 배치, 리더 선출, ISR 관리 등.
-9. 단일 Controller가 아닌 Quorum(정족수) 기반, 그 중 실제 일하는 Active Leader가 있고, 장애 시 다른 하나가 리더로 승격 (가장 최신의 로그를 가진 노드가 리더)
-10. 장애 복구시 Zookeeper에서는 재선출이 필요해서 느리지만, Kraft에서는 빠르게 증시 승격
 
 
 ## Kafka Brokers
@@ -70,7 +66,12 @@ ___
 5. ControllerBroker가 어느 브로커에 어떤 파티션을 배치할지 계획 수립
 6. ControllerBroker가 파티션의 복제본을 관리 
 7. ControllerBroker가 파티션의 리더를 선출하고 ISR 변경사항 메타데이터에 기록
-8. 파티션의 리더 Broker가 In Sync Replicas, follower 모니터링
+8. ZooKeeper 의존성을 지우기 위해 Kraft의 Quorum Controller가 있음. 클러스터의 메타데이터, 파티션 리더쉽, 멤버쉽 변화를 관리.
+9. Kraft모드에서는 Controller가 QuorumController Cluster로 여러대 구성돼 있음. ControllerBroker가 QuorumController로 진화함.
+10. 역할은 동일 파티션 배치, 리더 선출, ISR 관리 등.
+11. 단일 Controller가 아닌 Quorum(정족수) 기반, 그 중 실제 일하는 Active Leader가 있고, 장애 시 다른 하나가 리더로 승격 (가장 최신의 로그를 가진 노드가 리더)
+12. 장애 복구시 Zookeeper에서는 재선출이 필요해서 느리지만, Kraft에서는 빠르게 증시 승격
+13. 파티션의 리더 Broker가 In Sync Replicas, follower 모니터링
 
 
 ## Kafka Producers
@@ -216,7 +217,7 @@ ___
 20. aggregate + custom aggregator : key별 합계, 평균 등 커스텀 집계 로직을 정의하여 사용할 수 있음(sum, min, max), 다른 타입으로 리턴 가능(Integer to Object) (Stateful)
 21. count : key별 이벤트 횟수 세기 (Stateful)
 22. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful). 데이터는 계속해서 흘러들오기 때문에 특정 시간 범위로 끊을때 사용함.
-23. 집계 : groupByKey() -> windowedBu() -> aggregate / count / reduce => 결과는 무조건 KTable로 나옴. (현재까지의 집계 결과, 집계는 누적된 상태를 유지)
+23. 집계 : groupByKey() -> windowedBy() -> aggregate / count / reduce => 결과는 무조건 KTable로 나옴. (현재까지의 집계 결과, 집계는 누적된 상태를 유지)
 24. join : KStream - KStream join시 JoinWindow로 시간 범위 지정. Join 된 새로운 KStream 이벤트가 생성
 25. Tumbling Window : 고정시간 (분,시간,일 등) 단위로 시간겹침 없이 집계.(1-3, 4-6, 7-9, ...)
 26. Hopping Window : 고정크기 윈도우를 일정 간격으로 점프. 중첩시간 있음. (1-3, 3-5, 5-7, ...)
