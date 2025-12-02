@@ -45,7 +45,7 @@
     └─ Prometheus, Grafana 연동
 
 - 여러 서버에 이벤트를 저장하고, 전달하는 분산 메시지 시스템.
-- Kafka Protocol, TCP 프로토콜을 통해 이벤트를 통신하는. 서버(Broker, Zookeeper/Kraft) , 클라이언트(Producer, Consumer, Etc) 구조.
+- Kafka Protocol, TCP를 통해 이벤트를 통신하는. 서버(Broker, Zookeeper/Kraft) , 클라이언트(Producer, Consumer, Etc) 구조.
 
 ## Zookeeper
 ## Kraft
@@ -105,7 +105,7 @@ ___
 3. Kafka Cluster 내부에 __consumer_offsets 내부 토픽이 있고 거기서 컨슈머 그룹의 offset을 전체 관리함.
 4. ConsumerGroup이라는 개념이 있음. 여러 컨슈머들의 논리적 그룹이고, group.id를 지정하여 집합으로 묶을 수 있음.
 5. 한 ConsumerGroup내에서 토픽의 각 파티션은 오직 한 멤버에 의해 소비됨.
-6. 컨슈머 그룹에 새로운 멤버가 참여하거나, 컨슈머가 장애로 HeartBeat 전송에 실패하거나, Consuming하고 있는 파티션 갯수가 증가하면 Kafka Consumer Rebalance(컨슈머그룹의 멤버가 소비하는 토픽의 리밸런식)가 발생한다. 
+6. 컨슈머 그룹에 새로운 멤버가 참여하거나, 컨슈머가 장애로 HeartBeat 전송에 실패하거나, Consuming하고 있는 파티션 갯수가 증가하면 Kafka Consumer Rebalance(컨슈머그룹의 멤버가 소비하는 토픽의 리밸런싱)가 발생한다. 
 7. 각 컨슈머 그룹마다 Group Coordinator가 할당되어(해쉬 로직으로 선정) 해당 그룹의 offset을 관리함. Group별 관리를 통해 효율성과 신뢰성을 높임.
 8. Consumer Group Coordinator는 cluster의 Broker 중 한대가 관리 역할을 맡는거임.
 9. 그룹 멤버 관리, Consumer Leader 선정, 파티션 할당 정보 다른 consumer 들에게 전달, consumer 상태 모니터링, 오프셋 저장관리, 리밸런스 관장
@@ -144,7 +144,7 @@ ___
 18. 위 설정을 통해 Kafka Streams에서 Exactly-Once를 보장
 19. Topic에서 메시지 읽기, 처리 로직(집계/통계), toTopic에 쓰기 이 작업이 transaction으로 묶이고 중간에 장애가 발생하면 전체가 롤백하여 중복 결과 생성 방지 
 20. log.cleanup.policy : compact로 설정하면 LogCompaction 활성화 되고, Producer에서 보낸 같은 Key에 대한 최신값만 유지하고 이전 값들은 삭제. 
-21. log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정. 낮을 수록 더 자주 트리거 됨 
+21. log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정. 낮을 수록 더 자주 트리거 됨 (오래된 값의 비율)
 22. log.cleaner.backoff.ms=15000 Cleaner 스레드 체크 간격 (기본 15초). 
 23. log.cleanup.policy : delete 시간/크기 기반 삭제(기본값) , 기간은 7일 bytes는 기본은 무제한. 
 24. log.retention.check.interval.ms : 설정 시간마다 백그라운드 스레드가 실행되고 로그 세그먼트 확인(compact, delete, compact+delete)
@@ -246,12 +246,18 @@ ___
 3. schema-registry-start /etc/schema-registry/schema-registry.properties로 실행
 4. props.put("schema.registry.url", "http://localhost:8081"); 로 등록해줘야함. 
 5. Producer/Consumer, Kafka Connect, Kafka Streams, ksqlDB 등 Kafka와 데이터를 주고받는 모든 컴포넌트에서 사용 가능
-6. 스키마 중앙 저장 및 버전 관리, 스키마 등록 및 검증, 조회 및 역직렬화, 호환선 검증 등. 
-7. Forward Compatibility(전방) : 이전 스키마로 새 데이터 읽기 가능. Producer 먼저 업그레이드 해야함.
-8. 이전 스키마가 새 데이터를 읽어야 함. Producer과 과거 스키마로 보내도 Consumer는 이해하니깐 Producer먼저
-9. Backward Compatibility(후방) : 새 스키마로 이전 데이터 읽기 가능. 최신 스키마에 추가된 필드는 Default로 채워집니다. Consumer 먼저 업그레이드 해야함
-10. 새 스키마가 이전 데이터를 읽어야 함. 호환성이 보장하는 방향으로 데이터가 흐르도록... Consumer 먼저
-11. Full Compatibility(전체 호환성) : 둘다 만족. 양방향 호환성 보장을 위해 기본값(default)이 있는 필드만 추가하거나 제거할 수 있음.
+6. 스키마 중앙 저장 및 버전 관리, 스키마 등록 및 검증, 조회 및 역직렬화, 호환선 검증 등.
+7. 호환성 체크를 켜두면 Schema Registry에서 호환성모드(Forward, Backward, Full, None)에 따라서 막아줌.
+8. Forward Compatibility(전방) : 이전 스키마로 새 데이터 읽기 가능. Producer 먼저 업그레이드 해야함.
+9. 새 데이터에 phone필드가 있으면 스키마는 phone을 모름. 그렇기 때문에 스키마가 그냥 phone을 무시하고 데이터를 읽어야 함.
+10. phone 필드에 optional/default가 있어야 무시 가능. 새 필드 추가할 때 Default값이 있어야 함 
+11. Backward Compatibility(후방) : 새 스키마로 이전 데이터 읽기 가능.  Consumer 먼저 업그레이드 해야함
+12. 이전 데이터에 phone필드가 없는데, 새 스키마는 phone을 기대함
+13. 없는 필드를 default로 채워서 읽을 수 있어야 함. 새필드에 default를 채움
+14. 둘의 차이는 필드 삭제할 때 나옴.
+15. Forward: 필드 삭제 가능 (이전 스키마로 새 데이터(삭제된 필드 없음)를 읽을 때 그냥 default로 채우면 됨)
+16. Backward: 필드 삭제 불가 (새 스키마로 이전 데이터(삭제된 필드 있음)를 읽을 수 없으니)
+17. Full Compatibility(전체 호환성) : 둘다 만족. 양방향 호환성 보장을 위해 기본값(default)이 있는 필드만 추가하거나 제거할 수 있음.
    
 
 ## Confluent REST Proxy
@@ -284,12 +290,14 @@ ___
 ___
 1. KSQL은 Kafka Streams를 SQL로 쉽게 다룰 수 있게 해주는 스트리밍 데이터 베이스
 2. Kafka Topic을 테이블 처럼 SQL로 쿼리로 조회/집계/조인.
-2. KSQL CLI를 통해, 쿼리를 작성하고 KSQL Stream을 만드는것.(SQL 기반)
-3. KSQL PORT : 8088 (KSQL CLI, REST API 상호작용을 포함.)
-4. KSQL의 배포 모드에는 Headless Mode, Interactive Mode가 있음.
-5. Headless : SQL 파일을 미리 작성하고 서버 시작 시 자동 실행
-6. Interactive : CLI 또는 REST API , 통해 대화형으로 실시간 쿼리 실행
-7. Kafka Streams 라이브러리 데이터 집계는 개발자 한정, 컴파일,빌드,배포 코드 수정 등 작업이 필요. 반면 KSQL을 통해서 간단하게 데이터 연산/집계.
+3. KSQL CLI를 통해, 쿼리를 작성하고 KSQL Stream을 만드는것.(SQL 기반)
+4. KSQL PORT : 8088 (KSQL CLI, REST API 상호작용을 포함.)
+5. KSQL의 배포 모드에는 Headless Mode, Interactive Mode가 있음.
+6. Headless : SQL 파일을 미리 작성하고 서버 시작 시 자동 실행 
+7. ex : CREATE STREAM filtered_users AS SELECT * FROM users_stream WHERE age > 20;
+8. ksql 서버가 계속 살아있는동안 백그라운드에서 쿼리가 실행되면서 동작함.
+9. Interactive : CLI 또는 REST API, 통해 대화형으로 실시간 쿼리 실행
+10. Kafka Streams 라이브러리 데이터 집계는 개발자 한정, 컴파일,빌드,배포 코드 수정 등 작업이 필요. 반면 KSQL을 통해서 간단하게 데이터 연산/집계.
 
 
 ## Avro
