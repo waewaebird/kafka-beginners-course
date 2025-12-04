@@ -3,18 +3,13 @@
 라운드 로빈 방식으로
 컨슈머 그룹
 
-
-
 - wsl2 및 Ubuntu 설치
 
 - Java JDK 11 설치
 
 - Kafka 바이너리 설치
 
-- 
-
-
-
+-
 
 
 PATH="$PATH:~/home/jzangeva/kafka_2.13-3.1.0/bin"
@@ -57,7 +52,6 @@ GET _cat/indices : 현재 저장된 모든 인덱스(테이블 같은 개념)를
 https://cnr.sh/posts/2017-08-29-how-paint-bike-shed-kafka-topic-naming-conventions/ : 토픽 네이밍
 
 
-
 Get Taxi
         
 userApp -> User Position Service(Producer) =>  user_position Topic-|  ->    Surge Pricing
@@ -67,12 +61,21 @@ userAPP -> Taxi Cost Service(Consumer)      <= urge_pricing Topic -| <----------
                                                                    |
                                                                    ---------------------> Analytics Consumer (Kafka Connect) -------> Analytics Store(Amazon S3)
 
-
 My Social Media
-
-
 RedPanda 
 
+
+시험 2 25번
+
+capabilities 능력,역량
+compatibility 호환성
+discarding 버리는
+scalable 확장가능
+seamless 원활한
+peek 엿보다
+
+37/60  23   61
+41/60  19   68
 
 
 
