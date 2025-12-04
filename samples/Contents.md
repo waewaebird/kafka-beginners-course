@@ -47,6 +47,7 @@
 - 여러 서버에 이벤트를 저장하고, 전달하는 분산 메시지 시스템.
 - Kafka Protocol, TCP를 통해 이벤트를 통신하는. 서버(Broker, Zookeeper/Kraft) , 클라이언트(Producer, Consumer, Etc) 구조.
 
+
 ## Zookeeper
 ## Kraft
 ___
