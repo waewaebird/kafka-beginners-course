@@ -51,12 +51,12 @@
 ## Zookeeper
 ## Kraft
 ___
-1. kafka Cluster의 메타데이터 관리와 조정역할을 함.
+1. kafka Cluster의 상태, 메타데이터 관리와 조정역할을 함. 브로커, 토픽, 파티션에 대한 정보를 유지 관리.
 2. Apache Zookeeper라는 이름의 외부 별도 시스템, Kraft는 자체 내장 메커니즘
 3. ZooKeeper Node = ZooKeeper 서버 프로세스 (인스턴스) 그러나 보통 Node = 서버로 통용됨.
 4. ZooKeeper 앙상블에도 Zookeeper Node 즉 서버를 여러대 놓을 수 있음.
 5. ZooKeeper Quorum은 (total/2) + 1 개까지 남을 수 있음. 즉 정족수를 충족해야함. 충족하지 못한다면 Kafka 생태계가 점진적으로 마비됨.
-
+6. ZooKeeper Port에는 2181(클라이언트 연결), 2888(Leader & Follower 통신), 3888(Leader 선출용) 이 있음.
 
 ## Kafka Brokers
 ___
@@ -73,6 +73,7 @@ ___
 11. 단일 Controller가 아닌 Quorum(정족수) 기반, 그 중 실제 일하는 Active Leader가 있고, 장애 시 다른 하나가 리더로 승격 (가장 최신의 로그를 가진 노드가 리더)
 12. 장애 복구시 Zookeeper에서는 재선출이 필요해서 느리지만, Kraft에서는 빠르게 증시 승격
 13. 파티션의 리더 Broker가 In Sync Replicas, follower 모니터링
+14. Broker의 성능을 유지하기 위해선 Throughput, Latency/Responsiveness, Data Transfer Capability, Resource Utilization의 균형있는 관리가 중요.
 
 
 ## Kafka Producers
@@ -97,60 +98,105 @@ ___
 18. properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")를 하면 acks=all, retries Integer.MAX_VALUE, max.in.flight.requests.per.connection ≤ 5(응답을 안기다리고 연속으로 보냄) 자동으로 설정된다.
 19. 설정간 충돌이 발생하면 ConfigException이 발생
 20. request.timeout.ms : acks=1 , acks=all 일경우 브로커로부터 응답을 받기 위해 기다리는 시간. 시간내에 못받으면 재시도(다시 메시지 전송)함.
+21. retries : 실패한 메시지를 자동으로 재전송하는 횟수 설정. default는 Integer.MAX_VALUE 사실상 무제한으로 시도함
+22. delivery.timeout.ms : 메시지 재시도를 하는 시간 default 2분으로, 이 시간동안만 재시도를 함.
+23. 기본 Partitioning은 메시지 Key를 입력하면 MurmurHash2함수를 키에 적용하여 해시 결과를 파티션수로 나눈 나머지로 파티션 결정.
+24. Key가 없을 경우 kafka 2.4이전 버전에서는 RoundRobin 방식으로, 이후에는 Sticky 방식으로 배분
+25. Sticky 방식은 batch.size, linger.ms 조건을 만족하면 다음 파티션으로 전환 배치하는 방식으로 효율성 향상 및 지연시간 감소.
+26. 또는 Partitioner 인터페이스를 구현하여, 특정 비즈니스 규칙이나 사용자 정의 기준에 따라 파티션 배분을 하는 커스텀 파티셔너를 사용할 수 있음.
+27. properties 설정에서 bootstrap.servers는 필수 설정
+28. properties 설정시 Key-Value 모두 String 타입으로 지정하는 것이 표준
+29. Producer에서 send() 할 때 동기, 비동기 방식을 선택할 수 있음. 
+30. Asynchronous => producer.send(record); 대용량 데이터, 성능 중요할때 사용. Broker의 응답을 기다리지 않고 계속 전송하여 Throughput 상승
+31. Synchronous = > producer.send(record).get(); 중요한 데이터, 순서 중요할때 사용
+32. producer에서 압축 타입을 고려할 때는 CPU 자원 사용과 대욕폭 절감 간의 균현을 고려하여 선택해야함.
+33. compression.type을 설정하면 Producer가 압축하여 Broker에게 전송. 
+34. 토픽 레벨에서도 설정가능하지만 일반적이는 않음.
+35. consumer는 메시지에 포함된 특수 헤더를 인식하여 합축을 해제. 컨슈머 측에서 압축 타입과 관련된 설정을 하지 않아도 처리 가능함.
+36. gzip, snappy, lz4, zstd 압축 타입이 있음. default는 none. 
 
 
 ## Kafka Consumers
 ___
 1. 컨슈머는 Kafka에서 event를 읽는 poll Client.
-2. __consumer_offsets는 컨슈머가 직접 관리하는게 아님.
-3. Kafka Cluster 내부에 __consumer_offsets 내부 토픽이 있고 거기서 컨슈머 그룹의 offset을 전체 관리함.
-4. ConsumerGroup이라는 개념이 있음. 여러 컨슈머들의 논리적 그룹이고, group.id를 지정하여 집합으로 묶을 수 있음.
-5. 한 ConsumerGroup내에서 토픽의 각 파티션은 오직 한 멤버에 의해 소비됨.
-6. 컨슈머 그룹에 새로운 멤버가 참여하거나, 컨슈머가 장애로 HeartBeat 전송에 실패하거나, Consuming하고 있는 파티션 갯수가 증가하면 Kafka Consumer Rebalance(컨슈머그룹의 멤버가 소비하는 토픽의 리밸런싱)가 발생한다. 
-7. 각 컨슈머 그룹마다 Group Coordinator가 할당되어(해쉬 로직으로 선정) 해당 그룹의 offset을 관리함. Group별 관리를 통해 효율성과 신뢰성을 높임.
-8. Consumer Group Coordinator는 cluster의 Broker 중 한대가 관리 역할을 맡는거임.
-9. 그룹 멤버 관리, Consumer Leader 선정, 파티션 할당 정보 다른 consumer 들에게 전달, consumer 상태 모니터링, 오프셋 저장관리, 리밸런스 관장
-10. Consumer Leader는 consumer 인스턴 중 하나로, 파티션 할당 전략(예: RangeAssignor, RoundRobinAssignor 등) 에 따라 consumer에게 파티션을 할당하고 Group Coordinator에가 내용 전달.
-11. Consumer Rebalance에는 Eager와 Cooperative가 있음
-12. Eager는 Stop the world를 발생시킴. 모든 파티션을 회수한 후 전체 재할당. 다운타임 발생.
-13. Cooperative 영향받는 파티션만 재할당. 점진적 리밸런싱으로 다운타임 최소화 
-14. auto.offset.reset : 초기 오프셋이 없거나, 현재 오프셋이 유효하지 않을 때 컨슈머가 어떻게 동작할지를 정의. (__consumer_offsets 내부 토픽에서 이 컨슈머 그룹의 오프셋 조회)
-15. auto.offset.reset : earliest - 파티션의 가장 처음부터, latest - 컨슈머가 시작되는 시점의 토픽/파티션에서 가장 최신 오프셋(LEO) 위치부터 읽기 시작, none - 예외를 발생시킴 (수동 처리)
-16. consumer.commitSync() : poll()메시지 처리 완료 후, 명시적으로 offset 수동커밋, 기본은 자동 커밋(enable.auto.commit=true) , Group Coordinator로부터 응답을 받기 전까지 다음 코드로 진행하지 않습니다. (blocking)
-17. subscribe() : Consumer Group에 참여. 파티션 자동할당. 리밸런싱 발생 consumer.subscribe(Arrays.asList("topic1", "topic2")); (props1.put("group.id", "group-A") 그룹 아이디 설정은 subscribe전에 해야함)
-18. assign() : 파티션 수동 할당. 그룹 참여 하지 않고 리밸런싱 발생 안함 consumer.assign(Arrays.asList(new TopicPartition("topic", 0)));
-19. seek() : consumer가 읽을 위치(offset)를 수동으로 지정. consumer.seek(topicPartition, offset); 실패한 메시지 재처리, 특정 메시지 반복 분석, 동일 데이터에 대한 비교 분석 위해 씀.
-20. poll전에 초기에 입력하거나 consumer.seek(partition0, 100);  에러 발생시 재처리 catch 블록에 적거나, 아무튼 컨슈머 로직의 poll 전에 넣어야 함. (여기서 부터 다시 poll 해라라는 의미)
+2. 컨슈머의 데이터 처리중 발생할 수 있는 예외를 타입별로 다르게 처리하고, commit 타이밍을 정확히 제어해야 데이터 손실이나 중복 처리를 방지할 수 있음.
+3. kafka는 메시지를 바이트배열로 저장하기 때문에, Consumer가 사용가능한 형식으로 Deserializer가 필요
+4. 바이트 배율로 저장하는 이유는? 어떤 개발언어든 사용가능, 네트워크 전송에 최적화 돼있는 효율성, 문자열 숫자 JSON 객체 등 모든 데이터 타입도 가능한 유연성이라는 장점들이 있음.
+5. __consumer_offsets는 컨슈머가 직접 관리하는게 아님.
+6. Kafka Cluster 내부에 __consumer_offsets 내부 토픽이 있고 거기서 컨슈머 그룹의 offset을 전체 관리함.
+7. ConsumerGroup이라는 개념이 있음. 여러 컨슈머들의 논리적 그룹이고, group.id를 지정하여 집합으로 묶을 수 있음.
+8. group.id로 묶인 그룹 내에서 파티션을 자동으로 분배하여 병렬 처리, 파티션 할당 조정, 오프셋 관리, 리밸런싱을 할 수 있음
+9. 한 ConsumerGroup내에서 토픽의 각 파티션은 오직 한 멤버에 의해 소비됨.
+10. 컨슈머 그룹에 새로운 멤버가 참여하거나, 컨슈머가 장애로 HeartBeat 전송에 실패하거나, Consuming하고 있는 파티션 갯수가 증가하면 Kafka Consumer Rebalance(컨슈머그룹의 멤버가 소비하는 토픽의 리밸런싱)가 발생한다. 
+11. 각 컨슈머 그룹마다 Group Coordinator가 할당되어(해쉬 로직으로 선정) 해당 그룹의 offset을 관리함. Group별 관리를 통해 효율성과 신뢰성을 높임.
+12. Consumer Group Coordinator는 cluster의 Broker 중 한대가 관리 역할을 맡는거임.
+13. 그룹 멤버 관리, Consumer Leader 선정, 파티션 할당 정보 다른 consumer 들에게 전달, consumer 상태 모니터링, 오프셋 저장관리, 리밸런스 관장
+14. Consumer Leader는 consumer 인스턴 중 하나로, 파티션 할당 전략(예: RangeAssignor, RoundRobinAssignor 등) 에 따라 consumer에게 파티션을 할당하고 Group Coordinator에가 내용 전달.
+15. Consumer Rebalance에는 Eager와 Cooperative가 있음
+16. Eager는 Stop the world를 발생시킴. 모든 파티션을 회수한 후 전체 재할당. 다운타임 발생.
+17. Cooperative 영향받는 소수의 파티션만 재할당. 점진적 리밸런싱으로 다운타임 최소화. Consumer Group 전체에서 안정적인 파티션 할당이 이루어질 때까지 부분 재조정을 여러번 반복할 수 있음 
+18. auto.offset.reset : 초기 오프셋이 없거나, 현재 오프셋이 유효하지 않을 때 컨슈머가 어떻게 동작할지를 정의. (__consumer_offsets 내부 토픽에서 이 컨슈머 그룹의 오프셋 조회)
+19. auto.offset.reset : earliest - 파티션의 가장 처음부터, latest - 컨슈머가 시작되는 시점의 토픽/파티션에서 가장 최신 오프셋(LEO) 위치부터 읽기 시작, none - 예외를 발생시킴 (수동 처리)
+20. consumer.commitSync() : poll()메시지 처리 완료 후, 명시적으로 offset 수동커밋, 기본은 자동 커밋(enable.auto.commit=true) , Group Coordinator로부터 응답을 받기 전까지 다음 코드로 진행하지 않습니다. (blocking)
+21. subscribe() : Consumer Group에 참여. 파티션 자동할당. 리밸런싱 발생 consumer.subscribe(Arrays.asList("topic1", "topic2")); (props1.put("group.id", "group-A") 그룹 아이디 설정은 subscribe전에 해야함)
+22. assign() : 파티션 수동 할당. 그룹 참여 하지 않고 리밸런싱 발생 안함 consumer.assign(Arrays.asList(new TopicPartition("topic", 0)));
+23. seek() : consumer가 읽을 위치(offset)를 수동으로 지정. consumer.seek(topicPartition, offset); 실패한 메시지 재처리, 특정 메시지 반복 분석, 동일 데이터에 대한 비교 분석 위해 씀.
+24. poll전에 초기에 입력하거나 consumer.seek(partition0, 100);  에러 발생시 재처리 catch 블록에 적거나, 아무튼 컨슈머 로직의 poll 전에 넣어야 함. (여기서 부터 다시 poll 해라라는 의미)
+25. Shutdown Hook을 통해 close() 시키면 그 consumer가 즉시 그룹에서 탈퇴하고 리밸러스 발생. 다른 consumer들이 빠르게 파티션을 재할당받아 메시지 처리 재게
+26. session.timeout.ms : consumer의 정상여부 체크 시간. close()가 호출되지 않고 종료되면, Consumer Group Coordinator는 그 consumer가 여전히 살아있다고 판단하여 이 기간동안 대기
+27. 파티션의 메시지가 처리되지 않고 타임아웃 후에야 리밸런싱 시작. 그러므로 close()가 제대로 호출되어야 불필요한 메시지 처리 지연을 줄일 수 있음. 또한 close()는 마지막 오프셋을 커밋하여 리밸런싱 후 중복 처리 가능성도 감소시킴.
+28. max.poll.interval.ms : poll() 호출 간 최대 허용 시간. poll() 이후 메시지 처리하고 다음 poll()을 호출하는 주기. default는 5분
+29. 위 시간 내에 다음 poll()이 호출되지 않으면 해당 컨슈머가 문제있다고 판단하여 리밸런싱
+30. 만약 처리 시간이 오래걸리는 복잡한 메시지 처리 로직이 있다면 max.poll.interval.ms를 증가시켜 처리시간을 충분히 확보해야함.
+31. fetch.min.bytes : 네트워크 레벨에서 consumer가 broker로부터 받을 최소 데이터 양을 지정. 큰 값으로 설정하면 처리량이 증가함. props.put("fetch.min.bytes", "1048576");
+32. fetch.max.wait.ms : fetch.min.bytes 크기에 도달하기 전까지 broker가 대기하는 최대시간.
 
 
 ## Kafka Core Concepts
 ___
 1. 아파치 카프카는 real-time 데이터를 처리하고, 스트리밍 기능이 가능하도록 설계되어 시스템과 애플리케이션 간에 안정적인 데이터 전송을 제공.
 2. 실시간 대용량 데이터를 안정적으로 수집 저장 처리할 수 있는 파이프라인을 제공한다.(DataPipeLine : 데이터 전달 통로. 데이터 소스,수집,가공/변환,저장,분석, 활용 등 데이터가 여러 시스템을 거쳐 흐르도록 한 시스템)
-3. Offset은 보통 파티션 내 데이터의 고유한 순번을 말함. 메시지가 토픽에 생설될 때 브로커가 자동 할당함.(consumer_offset은 컨슈머가 어디까지 읽었는지 추적하는 값)
-4. Kafka는 .index 파일을 사용해 메시지를 빠르게 찾음. 오프셋-> 파일 위치 매핑 정보를 저장하여 전체 파일을 스캔하지 않고 바로 원하는 위치로 점프 가능 
-5. 토픽의 실제 메시지 데이터는 .log파일에 들어가 있고 그와 매핑되는 .index 파일도 있음(00000000000000001000.log , 00000000000000001000.index)
-6. 특정 offset의 파일을 찾을때는 파일명으로 먼저 세그먼트를 선택하고, .index파일에서 물리적 위치를 찾아 .log에 있는 메시지 데이터를 찾을 수 있음. 
-7. Producer에서 메시지 압축을 통해 네트워크 효율과, Broker 저장소 사용에 있어서 향상을 줌. 하지만 Producer의 압축과정, Consumer의 해제과정에서 CPU자원의 추가 소모가 들어감.
-8. Partition수를 증가시켜 컨슈머그룹에서 컨슈머를 할당하면 더 많은 병렬처리가 가능하지만 감소는 불가능 함. 
-9. 파티션 수 증가 시 Key의 파티션 매핑이 변경되어 동일 Key의 메시지가 다른 파티션으로 분산되며, 이는 순서 보장을 깨뜨림.
-10. 일반적인 Exactly-Once 는 Producer to Broker Exactly-Once , 이것은 Producer가 Broker에게 정확히 한번 쓰기 보장.
-11. props.put("enable.idempotence", "true");
-12. props.put("acks", "all");
-13. props.put("retries", Integer.MAX_VALUE); 
-14. props.put("max.in.flight.requests.per.connection", 5); 
-15. Kafka Stream에서 주로 사용하는 Exactly-Once는 읽기 -> 처리 -> 쓰기 전체를 원자적으로 처리, Consumer offset commit까지 Transaction으로 포함.
-16. props.put(StreamsConfig.APPLICATION_ID_CONFIG, "order-service");
-17. props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-18. 위 설정을 통해 Kafka Streams에서 Exactly-Once를 보장
-19. Topic에서 메시지 읽기, 처리 로직(집계/통계), toTopic에 쓰기 이 작업이 transaction으로 묶이고 중간에 장애가 발생하면 전체가 롤백하여 중복 결과 생성 방지 
-20. log.cleanup.policy : compact로 설정하면 LogCompaction 활성화 되고, Producer에서 보낸 같은 Key에 대한 최신값만 유지하고 이전 값들은 삭제. 
-21. log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정. 낮을 수록 더 자주 트리거 됨 (오래된 값의 비율)
-22. log.cleaner.backoff.ms=15000 Cleaner 스레드 체크 간격 (기본 15초). 
-23. log.cleanup.policy : delete 시간/크기 기반 삭제(기본값) , 기간은 7일 bytes는 기본은 무제한. 
-24. log.retention.check.interval.ms : 설정 시간마다 백그라운드 스레드가 실행되고 로그 세그먼트 확인(compact, delete, compact+delete)
-25. log.retention.hours : 로그 보관 기간 (기본 168시간 = 7일).  이 시간을 초과한 세그먼트 삭제. 
-26. log.retention.bytes : 파티션당 최대 로그 크기 (기본 -1 = 무제한). 이 크기를 초과하면 가장 오래된 세그먼트부터 삭제.
+3. Apache Kafka는 Java와 Scala 언어로 개발 된 시스템
+4. 분산 아키텍처를 갖추고 있어 확장성이 매우 뛰어나며, 토픽의 파티션을 여러 브로커에 분산하고 복제할 수 있습니다.
+5. Commit Log 분산의 원칙: "append-only, ordered, immutable" 데이터 저장 방식을 기반으로, 토픽을 여러 파티션으로 나누고 이를 여러 브로커에 분산 저장하여 높은 처리량, 장애 내성, 확장성을 얻음.
+6. ✅ Append-only (끝에만 추가) ✅ 순서대로만 읽기 ✅ 수정/삭제 없음을 통해 자연스럽게 Sequential I/O 구조를 강제하고 빠른 성능을 얻을 수 있음. 
+7. 모든 메세지를 디스크에 저장(Disk-based Retention), 설정한 기간동안 보관.
+8. 카프카가 대용량 데이터를 저장할 수 있는것도 디스크 기반 저장 덕분. 메모리가 아닌 디스크를 이용하기 때문에 비용 효율적으로 데이터 보관 가능.
+9. Offset은 보통 파티션 내 데이터의 고유한 순번을 말함. 메시지가 토픽에 생설될 때 브로커가 자동 할당함.
+10. consumer_offset은 컨슈머가 어디까지 읽었는지 추적하는 값으로 Broker가 관리하는 __consumer_offsets라는 내부 Topic에 저장. 은 컨슈머 그룹별로 독립적으로 저장.
+11. Kafka는 .index 파일을 사용해 메시지를 빠르게 찾음. 오프셋-> 파일 위치 매핑 정보를 저장하여 전체 파일을 스캔하지 않고 바로 원하는 위치로 점프 가능 
+12. 토픽의 실제 메시지 데이터는 .log파일에 들어가 있고 그와 매핑되는 .index 파일도 있음(00000000000000001000.log , 00000000000000001000.index)
+13. 특정 offset의 파일을 찾을때는 파일명으로 먼저 세그먼트를 선택하고, .index파일에서 물리적 위치를 찾아 .log에 있는 메시지 데이터를 찾을 수 있음.
+14. .log 파일은 CreateTime or LogAppendTime중 하나의 타임스테프만 저장할 수 있음
+15. Topic Level에선 message.timestamp.type=CreateTime , message.timestamp.type=LogAppendTime 이런식으로 설정
+16. Broker Level에선 server.properties 파일의 log.message.timestamp.type
+17. Producer에서 메시지 압축을 통해 네트워크 효율과, Broker 저장소 사용에 있어서 향상을 줌. 하지만 Producer의 압축과정, Consumer의 해제과정에서 CPU자원의 추가 소모가 들어감.
+18. gzip zstd lz4 snapp 등의 압축타입을 카프카에서 지원하며, 각 압축 유형은 압축 속도와 효율성 측면에서 균형을 제공함.
+19. Partition수를 증가시켜 컨슈머그룹에서 컨슈머를 할당하면 더 많은 병렬처리가 가능하지만 감소는 불가능 함. 
+20. 파티션 수 증가 시 Key의 파티션 매핑이 변경되어 동일 Key의 메시지가 다른 파티션으로 분산되며, 이는 순서 보장을 깨뜨림.
+21. 로그는 불변(immutable) 특성을 가지므로 이전에 지정된 메시지는 재분배되거나 재정렬 되비 않음.
+22. 일반적인 Exactly-Once 는 Producer to Broker Exactly-Once , 이것은 Producer가 Broker에게 정확히 한번 쓰기 보장.
+23. props.put("enable.idempotence", "true");
+24. props.put("acks", "all");
+25. props.put("retries", Integer.MAX_VALUE); 
+26. props.put("max.in.flight.requests.per.connection", 5); 
+27. Kafka Stream에서 주로 사용하는 Exactly-Once는 읽기 -> 처리 -> 쓰기 전체를 원자적으로 처리, Consumer offset commit까지 Transaction으로 포함.
+28. props.put(StreamsConfig.APPLICATION_ID_CONFIG, "order-service");
+29. props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+30. 위 설정을 통해 Kafka Streams에서 Exactly-Once를 보장
+31. Exactly-Once Semantics (EOS), Read-Process-Write 패턴의 트랜잭션 이라는것 이 있음.
+32. Topic에서 메시지 읽기 → 처리 로직(집계/통계) → 다른 Topic에 쓰기 → Consumer offset 커밋, 이 전체 과정을 하나의 트랜잭션으로 묶음.
+33. 중간에 장애 발생 시 전체가 롤백되어 메시지가 정확히 한 번만 처리되고, 중복 결과 생성을 방지함.
+34. 위와 같은 EOS를 Kafka Streams에선 EXACTLY_ONCE_V2 설정만으로 간단하게 자동 처리됨.
+35. 일반 Producer/Consumer API에서는 트랜잭션 관련 메소드(beginTransaction, sendOffsetsToTransaction, commitTransaction 등)를 개발자가 직접 호출해야 함.
+36. log.cleanup.policy : compact로 설정하면 LogCompaction 활성화 되고, Producer에서 보낸 같은 Key에 대한 최신값만 유지하고 이전 값들은 삭제.
+37. log.cleaner.min.cleanable.ratio=0.2 0.5 이런식으로 조정. 낮을 수록 더 자주 트리거 됨 (오래된 값의 비율)
+38. log.cleaner.backoff.ms=15000 Cleaner 스레드 체크 간격 (기본 15초). 
+39. log.cleanup.policy : delete 시간/크기 기반 삭제(기본값) , 기간은 7일 bytes는 기본은 무제한. 
+40. log.retention.check.interval.ms : 설정 시간마다 백그라운드 스레드가 실행되고 로그 세그먼트 확인(compact, delete, compact+delete)
+41. log.retention.hours : 로그 보관 기간 (기본 168시간 = 7일).  이 시간을 초과한 세그먼트 삭제. 
+42. log.retention.bytes : 파티션당 최대 로그 크기 (기본 -1 = 무제한). 이 크기를 초과하면 가장 오래된 세그먼트부터 삭제.
+43. log.segment.bytes : log 세그먼크 파일의 최대 크기를 지정, 이 크기에 도달하면 새로운 세그먼트 파일로 전환
 
 
 ## Kafka Configuration
