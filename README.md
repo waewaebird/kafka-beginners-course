@@ -73,9 +73,18 @@ discarding 버리는
 scalable 확장가능
 seamless 원활한
 peek 엿보다
+frequent 잦은, 자주
+subsequent 후속
+aggregation 집합, 집계
+retrieval 검색
+facilitate 가능하게하다, 촉진하다
+implications 영향, 결과
+
+
 
 37/60  23   61
 41/60  19   68
+40/60  20   66
 
 
 

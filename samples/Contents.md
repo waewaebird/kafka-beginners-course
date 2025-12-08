@@ -150,6 +150,7 @@ ___
 30. 만약 처리 시간이 오래걸리는 복잡한 메시지 처리 로직이 있다면 max.poll.interval.ms를 증가시켜 처리시간을 충분히 확보해야함.
 31. fetch.min.bytes : 네트워크 레벨에서 consumer가 broker로부터 받을 최소 데이터 양을 지정. 큰 값으로 설정하면 처리량이 증가함. props.put("fetch.min.bytes", "1048576");
 32. fetch.max.wait.ms : fetch.min.bytes 크기에 도달하기 전까지 broker가 대기하는 최대시간.
+33. max.poll.records : 애플리케이션 레벨에서 poll() 메서드 한번 호출시 반환되는 최대 레코드 수. 브로커로부터 데이터를 전달 받은 상황에서 내부 버퍼에 저장 후 갯수만큼만 전달. props.put("max.poll.records", "100"); // 100개씩만 주기
 
 
 ## Kafka Core Concepts
@@ -204,12 +205,28 @@ ___
 1. Kafka의 보존 설정은 log.retention.hours , log.retention.bytes , log.retention.minutes가 있다.
 2. .log .index .timeindex 3개 파일을 하나의 '세그먼트'라 부르고 설정에 따라 통째로 세그먼트를 삭제한다.
 3. JVM Options 중 가비지 컬렉션(G1GC 권장)과 힙 메모리 크기 설정은 Kafka 성능 향상에 중요함. 특히 GC pause 시간을 줄여 처리량과 지연시간을 개선할 수 있음.
-4. kafka-configs --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2 를 통해 동적으로 변경가능 한 설정이 있음. 
-5. Kafka는 일부 설정(Broker/Topic 레벨)을 재시작 없이 동적으로 변경 가능함. kafka-configs 명령어 사용
-6. Kafka Quota란게 특정 client(Producer, Consumer)가 Kafka를 독점하지 못하도록 제한하는 기능 
-7. ex ) Producer A의 과도한 전송(1GB/s)이 Producer B에 영향 → Quota로 공평하게 제한 (각 100MB/s)
-8. kafka-configs.sh 명령어로 관리
-9. Producer Quota (쓰기 제한) , Consumer Quota (읽기 제한) , Request Quota (요청 수 제한)
+4. JVM의 힙크기를 증가시키면 GC 발생전에 더 많은 객체를 메모리에 유지할 수 있음.
+5. G1GC는 JVM에 내장된 Garbage Collector로서 java9 부터 기본 GC. 일시 중지 시간을 최소화하여 대형 힙과 고처리량 시스템을 지원
+6. kafka-configs --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2 를 통해 동적으로 변경가능 한 설정이 있음. 
+7. Kafka는 일부 설정(Broker/Topic 레벨)을 재시작 없이 동적으로 변경 가능함. kafka-configs 명령어 사용
+8. Kafka Quota란게 특정 client(Producer, Consumer)가 Kafka를 독점하지 못하도록 제한하는 기능 
+9. ex ) Producer A의 과도한 전송(1GB/s)이 Producer B에 영향 → Quota로 공평하게 제한 (각 100MB/s)
+10. kafka-configs.sh 명령어로 관리
+11. Producer Quota (쓰기 제한) , Consumer Quota (읽기 제한) , Request Quota (요청 수 제한)
+12. zookeeper.properties파일은 Kafka의 클러스터 조정에 필수적인 주키퍼에 대한 구성 세부 정보를 포함하고 있으므로 매우 중요.
+13. server.properties 파일에 zookeeper.connect항목 수정을 통해서 zookeeper 연결 설정을 할 수 있음
+14. server.properties 내 log.dirs을 통해 kafka log의 저장 디렉토리를 설정 할 수 있다.
+15. Broker-level settings : 클러스터 전체 또는 해당 브로커의 모든 토픽에 대한 기본값으로 작동. server.properties파일에 정의하여 전역 기본값을 제공하여 일관된 클러스터 동작을 보장.
+16. Topic-level settings : 특정 토픽에만 적용되는 개별 맞춤 설정. 토픽 생성 시 또는 kafka-configs.sh로 동적설정. 브로커 기본값을 덮어쓰고 토픽별 요구사항 충족함.
+17. 우선순위는 토픽레벨 설정이 더 높아서 브로커레벨 설정을 덮어씀.
+18. Read-only 설정이란 브로커 시작 시에만 읽히는 설정. 실행중에는 변경 불가능하며 반드시 재시작 필요.
+19. broker.id (브로커 ID)
+20. log.dirs (데이터 경로)
+21. listeners (네트워크 리스너)
+22. zookeeper.connect (ZK 연결)
+23. process.roles (KRaft 역할)
+24. 반면 동적 update가능한 설정들은 Kafka 문서의 "Dynamic Update Mode" 컬럼을 확인하면 알 수 있음
+25. MirrorMaker 2.0을 이용하여 지리적으로 먼 클러스터로 데이터를 복제하는 것은 데이터 가용성을 보장
 
 
 ## Kafka Setup
@@ -234,11 +251,18 @@ ___
 ___
 1. request-latency-avg 모니터링 지표는 프로듀서 or 컨슈머가 브로커에게 요청을 보낸 후 응답받기까지의 평균시간 (ms) , 낮을 수록 좋은거!
 2. Kafka I/O작업에서 비정상적인 패턴 발견되면, 디스크 I/O 메트릭 (사용률, IOPS, 지연시간) , 브로커 로그 (I/O 관련 에러) , 관련 시스템 메트릭 (CPU, 메모리) 순서
+3. outgoing-byte-rate : Broker to Consumer Kafka에서 나가는 데이터의 초당 바이트 수. 브로커별로 측정되며 네트워크 처리량에 대한 명환한 가시성을 제공하며, 네트워크 용량 계획과 성능 평가에 필수적
+4. Java Management Extensions(JMX)는 자바 애플리케이션 전반의 표준 모니터링 기술. JVM에서 런타임 내부 상태(메모리, 스레드, 성능 메트릭 등)을 확인하고 제어할 수 있음.
+5. JMX MBean(메트릭 객체)를 통해 자원을 모니터링 함. JMX에서 활용할 수 있도록 카프카에서 ConsumerLag, ProducerThroughput 같은 핵심 모니터링 지표를 MBean으로 제공함.
+6. JVM Health - GC시간, 힙 메모리 사용량, 스레드 수등 JVM 상태를 추적해 메모리 누수나 GC병목 체크
+7. ConsumerLag -  프로듀서가 생산한 메시지와 컨슈머가 처리한 메시지 간의 차이입니다.
+8. Producer throughput - 생산자 요청 속도, 바이트 전송량등으로 클러스터 부하와 성능을 확인. 
 
 
 ## Kafka Streams
 ___
-1. kafka안에서 데이터를 실시간으로 변환/처리하는 라이브러리.
+1. kafka 생태계 내에서 데이터를 실시간으로 변환/처리를 지원하는 라이브러리.
+2. 데이터 변환, 데이터 보강, 복합 이벤트 처리의 기능을 제공하며, Exactly-once 기능을 지원하기 때문에 실시간 애플리케이션에 적합하다.
 2. kafka안에서 돌아가고 kafka를 사용하는 애플리케이션.
 3. 여러 토픽에서 데이터를 읽어 변환/집계하고, 결과를 다른 토픽으로 출력한다.
 4. Kafka Streams의 설정 키 상수에는 _CONFIG 접미사를 사용하는게 권장된다고 함. 더 나아가 Kafka Java API 네이밍 컨벤션.
@@ -258,7 +282,9 @@ ___
 14. KStream-KTable : KTable은 이미 저장되어 있어 즉시 조회 가능 
 15. KTable-KTable : 양쪽 모두 State Store에 저장되어 있음
 16. 여러가지 집계 / 연산 기능을 제공. 스트림으로 들어오는 다양한 데이터를 실시간으로 집계 / 연산하는 기능. Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
-17. groupByKey : 레코드를 키별로 그룹화 (Stateful)
+17. Re-partitioning : Key 변경 시 데이터를 새 파티션에 재배치하는 과정
+18. selectKey : Key 변경 + 재분할 "필요" 표시 실제 재분할은 아직 안함. (Stateless) 
+17. groupByKey :  실제 재분할 실행. 레코드를 키별로 그룹화하여 내부 토픽 생성하여 데이터 재배치 (Stateful)
 18. mapValues : Key는 유지한채 Value만 원하는 형태로 변환 (toUpperCase, parsJson, ...) (Stateless)
 19. reduce : 여러 개의 데이터들을 하나로 집계/축약, 같은 타입으로만 리턴(Integer to Integer) (Stateful)
 20. aggregate + custom aggregator : key별 합계, 평균 등 커스텀 집계 로직을 정의하여 사용할 수 있음(sum, min, max), 다른 타입으로 리턴 가능(Integer to Object) (Stateful)
@@ -268,8 +294,9 @@ ___
 24. join : KStream - KStream join시 JoinWindow로 시간 범위 지정. Join 된 새로운 KStream 이벤트가 생성
 25. Tumbling Window : 고정시간 (분,시간,일 등) 단위로 시간겹침 없이 집계.(1-3, 4-6, 7-9, ...)
 26. Hopping Window : 고정크기 윈도우를 일정 간격으로 점프. 중첩시간 있음. (1-3, 3-5, 5-7, ...)
-27. Sliding Window : Join 전용. 이벤트 발생 시점 기준으로 앞뒤 시간 범위. 주문 : 03 , 결제 : 05 일 경우 01~05 사이 결제 찾아서 Join(매칭) 시킴 
-28. Session Window : 비활동 시간(Gap) 으로 구분해서 사용자 활동 패턴 추적. 활동 있으면 세션 유지, Gap시간 동안 비활동 시 세션 종료. 사용자 기준 세션이라 크기가 동적임. 
+27. Sliding Window :  이벤트를 중심으로 +-N 시간 범위 내의 다른 스트림 이벤트를 찾아 Join. (주문 03시 발생 시 01~05시 사이 결제를 자동 매칭) 
+28. Session Window : 비활동 시간(Gap) 으로 구분해서 사용자 활동 패턴 추적. 활동 있으면 세션 유지, Gap시간 동안 비활동 시 세션 종료. 사용자 기준 세션이라 크기가 동적임.
+29. Tumbling, Hopping, Sliding Windows 등 시간 기반 윈도우는 도착 유예 기간을 제공하여 늦은 데이터도 윈도우 집계에 포함한다. 이를 통해 더 정확하고 포괄적인 데이터 처리 보장을 한다. 
 29. flatMapValues : 하나의 key에 대해 value를 여러개로 쪼개는 무상태 변환 오퍼레이터 (Stateless).
 30. key="order123", value={items: [item1, item2, item3]} /  key="order123", value=item1 key="order123", value=item2 key="order123", value=item3 로 분리.
 31. branch : 하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄. (Stateless)
