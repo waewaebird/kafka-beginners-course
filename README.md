@@ -67,24 +67,24 @@ RedPanda
 
 시험 2 25번
 
-capabilities `능력,역량`  
-compatibility `호환성`  
-discarding `버리는`  
-scalable `확장가능`  
-seamless `원활한`  
-peek `엿보다`  
-frequent `잦은, 자주`  
-subsequent `후속`  
-aggregation `집합, 집계`  
-retrieval `검색`  
-facilitate `가능하게하다, 촉진하다`  
-implications `영향, 결과`  
+capabilities <details><summary></summary>능력, 역량</details>   
+compatibility <details><summary></summary>호환성</details>     
+discarding <details><summary></summary>버리는</details>     
+scalable <details><summary></summary>확장가능</details>  
+seamless <details><summary></summary>원활한</details>  
+peek <details><summary></summary>엿보다</details>   
+frequent <details><summary></summary>잦은, 자주</details>  
+subsequent <details><summary></summary>후속</details>  
+aggregation <details><summary></summary>집합, 집계</details>  
+retrieval <details><summary></summary>검색</details>  
+facilitate <details><summary></summary>가능하게하다, 촉진하다</details>  
+implications <details><summary></summary>영향, 결과</details>  
 
 
 
-37/60  23   61
-41/60  19   68
-40/60  20   66
+37/60  23   61  
+41/60  19   68  
+40/60  20   66  
 
 
 
