@@ -1,8 +1,6 @@
 
 
 
-
-
 ## Kafka Streams
 Exactly-once 지원 트랜잭션 기능으로 정확히 한번 처리 보장
 읽기 : KStream<String, String> input = builder.stream("input-topic");
@@ -11,43 +9,6 @@ Exactly-once 지원 트랜잭션 기능으로 정확히 한번 처리 보장
 .mapValues(value -> value.toUpperCase());
 쓰기 : processed.to("output-topic"); 다른 토픽으로 결과 보내기
 Offset commit: input-topic의 offset 커밋 Kafka Streams도 내부적으로는 Consumer이기 때문에 Consumer offset을 사용합니다.
-
-
-
-
-
-
-
-## Kafka Streams
-props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-Key는 String으로 직렬화/역직렬화 Value도 String으로 직렬화/역직렬화 별도로 지정하지 않으면 이 설정이 자동 적용
-
-## Kafka Streams
-Kafka Streams에서의 에러처리 전략은
-Fail-fast : 기본동작. 에러 발생시 애플리케이션 즉시 중단
-Log-and-continue : 에러를 로그로 기록하고 계속 진행 props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
-Custom exception handling : 커스텀 예외 핸들러 구성
-
-
-
-
-
-## Kafka Streams
-State stores : Kafka Streams의 stateful연산을 지원하는 핵심 구성요소.  기본적으로 RocksDB로 구현된 영구 state store를 사용하지만, 인메모리 스토어도 사용할 수 있습니다.
-각 처리 태스크는 로컬 state store에서 상태를 유지하며, 키별로 데이터를 구성하여 효율성을 제공합니다.
-
-Changelog topics : Changelog topics는 state stores를 백업하여 Kafka Streams의 상태를 내결함성(fault-tolerant)으로 만듭니다.
-모든 state store는 별도의 Kafka 토픽으로 백업되며, 재시작이나 재할당 시 changelog에서 상태를 복원합니다. 이를 통해 장애 발생 시에도 상태 데이터가 손실되지 않습니다
-
-
-
-
-## Kafka Streams
-peek()는 비변환 연산(non-transforming operation)**으로, 스트림을 수정하지 않고 데이터를 검사할 수 있게 해줍니다.
-peek()을 통해 람다함수를 실행할 수 있는 기회를 제공.
-
-
 
 
 
