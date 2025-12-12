@@ -275,6 +275,8 @@ ___
 11. KStream은 모든 레코드를 독립적인 이벤트로 인식. 이벤트 스트림. ex) 은행 거래 내역
 12. KTable은 현재 상태만 보존하는것. 상태 테이블. ex) 계좌 잔액
 13. Kafka Topic(Data Source)에서 KStream 또는 KTable로 읽어와서 처리/변환 후 다른 Topic으로 보내버림.
+14. State Stores : Kafka Streams의 stateful연산을 지원하는 핵심 구성요소. 기본적으로 RocksDB(Persistent)로 구현된 디스크 기반 state store를 사용, 인메모리 스토어도 사용할 수 있음.
+15. Changelog topics : Persistent state stores를 자동으로 백업하여 Kafka Streams의 상태를 내결함성으로 만듭니다. 모든 state store는 changelog 토픽으로 백업되며, 상태를 복원할 수 있다.
 10. Kafka Streams를 처리하는 두 가지 방식에는 DSL과 ProcessorAPI가 있음
 11. DSL은 간단한 코드로 데이터를 처리할 수 있음. 예를들어 filter(), map(), join() 등
 12. join : KStream/KTable을 결합하는 연산. SQL의 join과 비슷함. Stateful 연산으로 Task 내부 State Store에 매칭에 필요한 데이터를 저장함.
@@ -311,6 +313,14 @@ ___
 39. process-latency : 레코드 하나 처리 시간
 40. commit-rate : 초당 커밋 횟수
 41. commit-latency : 커밋 작업에 걸리는 시간
+42. props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+43. props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+44. Key는 String으로 직렬화/역직렬화 Value도 String으로 직렬화/역직렬화 별도로 지정하지 않으면 이 설정이 자동 적용
+45. Kafka Streams에서의 에러처리 전략
+46. Fail-fast : 기본동작. 에러 발생시 애플리케이션 즉시 중단. deserialization 에러, processing 에러 등에서 발생할 수 있음
+47. Log-and-continue : 로그로 기록하고 계속 진행.  deserialization 에러에만 적용. props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+48. Custom exception handling : 에러 유형별로 다른 exception handler를 설정할 수 있음
+49. peek() 메소드는 비변환 연산으로 스트림을 수정하지 않고 데이터를 검사할 수 있는 기회를 제공. 디버깅 로깅 모니터링에서 주로 쓰임
 
 
 ## Confluent Schema Registry
