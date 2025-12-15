@@ -263,64 +263,73 @@ ___
 ___
 1. kafka 생태계 내에서 데이터를 실시간으로 변환/처리를 지원하는 라이브러리.
 2. 데이터 변환, 데이터 보강, 복합 이벤트 처리의 기능을 제공하며, Exactly-once 기능을 지원하기 때문에 실시간 애플리케이션에 적합하다.
-2. kafka안에서 돌아가고 kafka를 사용하는 애플리케이션.
-3. 여러 토픽에서 데이터를 읽어 변환/집계하고, 결과를 다른 토픽으로 출력한다.
-4. Kafka Streams의 설정 키 상수에는 _CONFIG 접미사를 사용하는게 권장된다고 함. 더 나아가 Kafka Java API 네이밍 컨벤션.
-5. Kafka Streams 인스턴스를 하나 더 추가(수평적 확장)하면 자동 리밸런싱이 발생하여 Task들이 인스턴스들에 재분배되고, 결과적으로 선형적 확장성을 얻는다.
-6. Kafka Streams Instance 안에 Task가 있음. Task는 내부 처리 단위이고, Partition당 하나의 Task가 생성됨. 하나의 Instance는 여러 Task를 처리할 수 있음.
-7. Task : Partition , 1:1. 입력 토픽의 파티션 갯수만큼 Task 자동생성. 여러 토픽의 파티션을 담당할 수 있으나 권장은 50~200개 파티션이라 한다.
-8. 효과적인 Kafka 데이터 파이프 라인은 파티션 수와 kafka Streams의 인스턴스 수를 함께 조정.
-9. 파티션 증가 -> 병렬 처리 단위 증가 + 인스턴스 증가 -> 분산 처리 능력 향상 => 처리량 개선 및 처리 시간 단축
-10. 데이터를 바라보는 관점에서 KStream, KTable이 있음.
-11. KStream은 모든 레코드를 독립적인 이벤트로 인식. 이벤트 스트림. ex) 은행 거래 내역
-12. KTable은 현재 상태만 보존하는것. 상태 테이블. ex) 계좌 잔액
-13. Kafka Topic(Data Source)에서 KStream 또는 KTable로 읽어와서 처리/변환 후 다른 Topic으로 보내버림.
-14. State Stores : Kafka Streams의 stateful연산을 지원하는 핵심 구성요소. 기본적으로 RocksDB(Persistent)로 구현된 디스크 기반 state store를 사용, 인메모리 스토어도 사용할 수 있음.
-15. Changelog topics : Persistent state stores를 자동으로 백업하여 Kafka Streams의 상태를 내결함성으로 만듭니다. 모든 state store는 changelog 토픽으로 백업되며, 상태를 복원할 수 있다.
-10. Kafka Streams를 처리하는 두 가지 방식에는 DSL과 ProcessorAPI가 있음
-11. DSL은 간단한 코드로 데이터를 처리할 수 있음. 예를들어 filter(), map(), join() 등
-12. join : KStream/KTable을 결합하는 연산. SQL의 join과 비슷함. Stateful 연산으로 Task 내부 State Store에 매칭에 필요한 데이터를 저장함.
-13. KStream-KStream : 양쪽 데이터를 State Store에 저장하고 매칭 대기(Join Window설정 필수)
-14. KStream-KTable : KTable은 이미 저장되어 있어 즉시 조회 가능 
-15. KTable-KTable : 양쪽 모두 State Store에 저장되어 있음
-16. 여러가지 집계 / 연산 기능을 제공. 스트림으로 들어오는 다양한 데이터를 실시간으로 집계 / 연산하는 기능. Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
-17. Re-partitioning : Key 변경 시 데이터를 새 파티션에 재배치하는 과정
-18. selectKey : Key 변경 + 재분할 "필요" 표시 실제 재분할은 아직 안함. (Stateless) 
-17. groupByKey :  실제 재분할 실행. 레코드를 키별로 그룹화하여 내부 토픽 생성하여 데이터 재배치 (Stateful)
-18. mapValues : Key는 유지한채 Value만 원하는 형태로 변환 (toUpperCase, parsJson, ...) (Stateless)
-19. reduce : 여러 개의 데이터들을 하나로 집계/축약, 같은 타입으로만 리턴(Integer to Integer) (Stateful)
-20. aggregate + custom aggregator : key별 합계, 평균 등 커스텀 집계 로직을 정의하여 사용할 수 있음(sum, min, max), 다른 타입으로 리턴 가능(Integer to Object) (Stateful)
-21. count : key별 이벤트 횟수 세기 (Stateful)
-22. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful). 데이터는 계속해서 흘러들오기 때문에 특정 시간 범위로 끊을때 사용함.
-23. 집계 : groupByKey() -> windowedBy() -> aggregate / count / reduce => 결과는 무조건 KTable로 나옴. (현재까지의 집계 결과, 집계는 누적된 상태를 유지)
-24. join : KStream - KStream join시 JoinWindow로 시간 범위 지정. Join 된 새로운 KStream 이벤트가 생성
-25. Tumbling Window : 고정시간 (분,시간,일 등) 단위로 시간겹침 없이 집계.(1-3, 4-6, 7-9, ...)
-26. Hopping Window : 고정크기 윈도우를 일정 간격으로 점프. 중첩시간 있음. (1-3, 3-5, 5-7, ...)
-27. Sliding Window :  이벤트를 중심으로 +-N 시간 범위 내의 다른 스트림 이벤트를 찾아 Join. (주문 03시 발생 시 01~05시 사이 결제를 자동 매칭) 
-28. Session Window : 비활동 시간(Gap) 으로 구분해서 사용자 활동 패턴 추적. 활동 있으면 세션 유지, Gap시간 동안 비활동 시 세션 종료. 사용자 기준 세션이라 크기가 동적임.
-29. Tumbling, Hopping, Sliding Windows 등 시간 기반 윈도우는 도착 유예 기간을 제공하여 늦은 데이터도 윈도우 집계에 포함한다. 이를 통해 더 정확하고 포괄적인 데이터 처리 보장을 한다. 
-29. flatMapValues : 하나의 key에 대해 value를 여러개로 쪼개는 무상태 변환 오퍼레이터 (Stateless).
-30. key="order123", value={items: [item1, item2, item3]} /  key="order123", value=item1 key="order123", value=item2 key="order123", value=item3 로 분리.
-31. branch : 하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄. (Stateless)
-32. "TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌.
-33. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현) DSL을 대체할 수 있음.
-34. Interactive Queries는 stateful 오퍼레이터를 통해 저장된 state store 내부를 조회하는 기능. REST API 방식으로 내부 상태를 조회할 수 있음.
-35. KafkaStreams는 to("Topic")을 통해 다른 토픽으로 결과를 전송하여 다운스트림 파이프라인을 구축하기도 하고, Interactive Queries를 통해 state store를 직접 조회하여 실시간 응답을 제공하기도 함.
-36. 토픽 방식이 더 표준적이고 안전함. Interactive Queries는 특수케이스용(디버깅, 임시 데이터, 초저지연 조회)
-37. Kafka Streams 모니터링 4가지 메트릭 데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
-38. Metrics 객체가 있음 streams.metrics(), metric 인스턴스의 이름을 체크하여 출력.
-38. process-rate : 초당 처리 레코드 수
-39. process-latency : 레코드 하나 처리 시간
-40. commit-rate : 초당 커밋 횟수
-41. commit-latency : 커밋 작업에 걸리는 시간
-42. props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-43. props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-44. Key는 String으로 직렬화/역직렬화 Value도 String으로 직렬화/역직렬화 별도로 지정하지 않으면 이 설정이 자동 적용
-45. Kafka Streams에서의 에러처리 전략
-46. Fail-fast : 기본동작. 에러 발생시 애플리케이션 즉시 중단. deserialization 에러, processing 에러 등에서 발생할 수 있음
-47. Log-and-continue : 로그로 기록하고 계속 진행.  deserialization 에러에만 적용. props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
-48. Custom exception handling : 에러 유형별로 다른 exception handler를 설정할 수 있음
-49. peek() 메소드는 비변환 연산으로 스트림을 수정하지 않고 데이터를 검사할 수 있는 기회를 제공. 디버깅 로깅 모니터링에서 주로 쓰임
+3. kafka안에서 돌아가고 kafka를 사용하는 애플리케이션.
+4. 여러 토픽에서 데이터를 읽어 변환/집계하고, 결과를 다른 토픽으로 출력한다.
+5. Kafka Streams의 설정 키 상수에는 _CONFIG 접미사를 사용하는게 권장된다고 함. 더 나아가 Kafka Java API 네이밍 컨벤션.
+6. Kafka Streams 인스턴스를 하나 더 추가(수평적 확장)하면 자동 리밸런싱이 발생하여 Task들이 인스턴스들에 재분배되고, 결과적으로 선형적 확장성을 얻는다.
+7. Kafka Streams Instance 안에 Task가 있음. Task는 내부 처리 단위이고, Partition당 하나의 Task가 생성됨. 하나의 Instance는 여러 Task를 처리할 수 있음.
+8. Task : Partition , 1:1. 입력 토픽의 파티션 갯수만큼 Task 자동생성. 여러 토픽의 파티션을 담당할 수 있으나 권장은 50~200개 파티션이라 한다.
+9. 효과적인 Kafka 데이터 파이프 라인은 파티션 수와 kafka Streams의 인스턴스 수를 함께 조정.
+10. 파티션 증가 -> 병렬 처리 단위 증가 + 인스턴스 증가 -> 분산 처리 능력 향상 => 처리량 개선 및 처리 시간 단축
+11. 데이터를 바라보는 관점에서 KStream, KTable이 있음.
+12. KStream은 모든 레코드를 독립적인 이벤트로 인식. 이벤트 스트림. ex) 은행 거래 내역
+13. KTable은 현재 상태만 보존하는것. 상태 테이블. ex) 계좌 잔액
+14. Kafka Topic(Data Source)에서 KStream 또는 KTable로 읽어와서 처리/변환 후 다른 Topic으로 보내버림.
+15. State Stores : Kafka Streams의 stateful연산을 지원하는 핵심 구성요소. 기본적으로 RocksDB(Persistent)로 구현된 디스크 기반 state store를 사용, 인메모리 스토어도 사용할 수 있음.
+16. Changelog topics : Persistent state stores를 자동으로 백업하여 Kafka Streams의 상태를 내결함성으로 만듭니다. 모든 state store는 changelog 토픽으로 백업되며, 상태를 복원할 수 있다.
+17. Kafka Streams를 처리하는 두 가지 방식에는 DSL과 ProcessorAPI가 있음
+18. DSL은 간단한 코드로 데이터를 처리할 수 있음. 예를들어 filter(), map(), join() 등
+19. join : KStream/KTable을 결합하는 연산. SQL의 join과 비슷함. Stateful 연산으로 Task 내부 State Store에 매칭에 필요한 데이터를 저장함.
+20. KStream-KStream : 양쪽 데이터를 State Store에 저장하고 매칭 대기(Join Window설정 필수)
+21. KStream-KTable : KTable은 이미 저장되어 있어 즉시 조회 가능 
+22. KTable-KTable : 양쪽 모두 State Store에 저장되어 있음
+23. 여러가지 집계 / 연산 기능을 제공. 스트림으로 들어오는 다양한 데이터를 실시간으로 집계 / 연산하는 기능. Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
+24. Re-partitioning : Key 변경 시 데이터를 새 파티션에 재배치하는 과정
+25. selectKey : Key 변경 + 재분할 "필요" 표시 실제 재분할은 아직 안함. (Stateless) 
+26. groupByKey :  실제 재분할 실행. 레코드를 키별로 그룹화하여 내부 토픽 생성하여 데이터 재배치 (Stateful)
+27. mapValues : Key는 유지한채 Value만 원하는 형태로 변환 (toUpperCase, parsJson, ...) (Stateless)
+28. reduce : 여러 개의 데이터들을 하나로 집계/축약, 같은 타입으로만 리턴(Integer to Integer) (Stateful)
+29. aggregate + custom aggregator : key별 합계, 평균 등 커스텀 집계 로직을 정의하여 사용할 수 있음(sum, min, max), 다른 타입으로 리턴 가능(Integer to Object) (Stateful)
+30. count : key별 이벤트 횟수 세기 (Stateful)
+31. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful). 데이터는 계속해서 흘러들오기 때문에 특정 시간 범위로 끊을때 사용함.
+32. 집계 : groupByKey() -> windowedBy() -> aggregate / count / reduce => 결과는 무조건 KTable로 나옴. (현재까지의 집계 결과, 집계는 누적된 상태를 유지)
+33. join : KStream - KStream join시 JoinWindow로 시간 범위 지정. Join 된 새로운 KStream 이벤트가 생성
+34. Tumbling Window : 고정시간 (분,시간,일 등) 단위로 시간겹침 없이 집계.(1-3, 4-6, 7-9, ...)
+35. Hopping Window : 고정크기 윈도우를 일정 간격으로 점프. 중첩시간 있음. (1-3, 3-5, 5-7, ...)
+36. Sliding Window :  이벤트를 중심으로 +-N 시간 범위 내의 다른 스트림 이벤트를 찾아 Join. (주문 03시 발생 시 01~05시 사이 결제를 자동 매칭) 
+37. Session Window : 비활동 시간(Gap) 으로 구분해서 사용자 활동 패턴 추적. 활동 있으면 세션 유지, Gap시간 동안 비활동 시 세션 종료. 사용자 기준 세션이라 크기가 동적임.
+38. Tumbling, Hopping, Sliding Windows 등 시간 기반 윈도우는 도착 유예 기간을 제공하여 늦은 데이터도 윈도우 집계에 포함한다. 이를 통해 더 정확하고 포괄적인 데이터 처리 보장을 한다. 
+39. flatMapValues : 하나의 key에 대해 value를 여러개로 쪼개는 무상태 변환 오퍼레이터 (Stateless).
+40. key="order123", value={items: [item1, item2, item3]} /  key="order123", value=item1 key="order123", value=item2 key="order123", value=item3 로 분리.
+41. branch : 하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄. (Stateless)
+42. "TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌.
+43. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현) DSL을 대체할 수 있음.
+44. Interactive Queries는 stateful 오퍼레이터를 통해 저장된 state store 내부를 조회하는 기능. REST API 방식으로 내부 상태를 조회할 수 있음.
+45. KafkaStreams는 to("Topic")을 통해 다른 토픽으로 결과를 전송하여 다운스트림 파이프라인을 구축하기도 하고, Interactive Queries를 통해 state store를 직접 조회하여 실시간 응답을 제공하기도 함.
+46. 토픽 방식이 더 표준적이고 안전함. Interactive Queries는 특수케이스용(디버깅, 임시 데이터, 초저지연 조회)
+47. Kafka Streams 모니터링 4가지 메트릭 데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
+48. Metrics 객체가 있음 streams.metrics(), metric 인스턴스의 이름을 체크하여 출력.
+49. process-rate : 초당 처리 레코드 수
+50 .process-latency : 레코드 하나 처리 시간
+51. commit-rate : 초당 커밋 횟수
+52. commit-latency : 커밋 작업에 걸리는 시간
+53. props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+54. props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+55. Key는 String으로 직렬화/역직렬화 Value도 String으로 직렬화/역직렬화 별도로 지정하지 않으면 이 설정이 자동 적용
+56. Kafka Streams에서의 에러처리 전략
+58. Fail-fast : 기본동작. 에러 발생시 애플리케이션 즉시 중단. deserialization 에러, processing 에러 등에서 발생할 수 있음
+59. Log-and-continue : 로그로 기록하고 계속 진행.  deserialization 에러에만 적용. props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+60. Custom exception handling : 에러 유형별로 다른 exception handler를 설정할 수 있음
+61. peek() 메소드는 비변환 연산으로 스트림을 수정하지 않고 데이터를 검사할 수 있는 기회를 제공. 디버깅 로깅 모니터링에서 주로 쓰임
+62. Exactly-Once Semantics(EOS)는 메시지가 정확히 한 번만 처리되는 것을 보장하는 기능. 중복처리X, 데이터손실X
+63. At-Most-Once 최대한번(데이터 손실 가능, 중복 없음) , At-Least-Once 최소한번(데이터 손실 없음, 중복 가능) , Exactly-Once 정확히 한번(데이터 손실 없음, 중복 없음)
+64. KafkaStreams는 읽기, 처리, 쓰기 , output-topic Offset Commit의 4가지 단계
+65. KStream<String, String> input = builder.stream("input-topic"); // 읽기
+66. KStream<String, String> processed = input.filter((key, value) -> value.length() > 5).mapValues(value -> value.toUpperCase()); // 처리
+67. processed.to("output-topic"); // 쓰기
+68. input-topic의 offset을 커밋해서 완료시킴.
+69. BEGIN TRANSACTION  ①input-topic에서 offset 100번 메시지 읽기 ②데이터 처리 (필터링, 변환 등) ③output-topic에 결과 쓰기 ④input-topic의 offset을 101로 커밋 COMMIT TRANSACTION
+70. props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2); 설정을 통해 활성화 할 수 있음
 
 
 ## Confluent Schema Registry
@@ -342,6 +351,7 @@ ___
 15. Forward: 필드 삭제 가능 (이전 스키마로 새 데이터(삭제된 필드 없음)를 읽을 때 그냥 default로 채우면 됨)
 16. Backward: 필드 삭제 불가 (새 스키마로 이전 데이터(삭제된 필드 있음)를 읽을 수 없으니)
 17. Full Compatibility(전체 호환성) : 둘다 만족. 양방향 호환성 보장을 위해 기본값(default)이 있는 필드만 추가하거나 제거할 수 있음.
+18. 스키마 호환성 파괴(Breaking Compatibility)는 스키마를 잘못 변경하여 이전버전과 최신 버전이 서로의 데이터를 읽을 수 없게 되는 상황을 의미.
    
 
 ## Confluent REST Proxy
@@ -357,6 +367,7 @@ ___
 8. HTTP Client → base64 인코딩 → REST Proxy → base64 디코딩 → Kafka Topic(바이너리) → REST Proxy → base64 인코딩 → HTTP Client
 9. Kafka client는 더 빠른 바이너리 프로토콜을 사용하고 배치 처리 최적화가 되어 있음.
 10. 멱등성 확보, 트랜젝션 사용, 다양한 기능 사용에 있어서 더 편리하기 때문에 저빈도 또는 아주 간략한 프로젝트 아닌이상 client 쓰는게 훨씬 이점이 많음.
+11. Request 요청을 보낼 때 Content-type은 항상 v2로 하는것이 권장됨. v2로 하는것이 최신 규격에 맞는 올바른 설정
 
 
 ## Kafka Connect
@@ -364,10 +375,19 @@ ___
 1. Kafka Connect는 Kafka와 다른 시스템(DB, 파일, API 등) 간에 데이터를 스트리밍하는 도구
 2. 플러그인형 커넥터와 작업(Task)으로 구성된 런타임을 띄우고, 커넥터 설정만으로 손쉽게 데이터 이동을 수행 8083
 3. connect-standalone connect-standalone.properties connector1.properties 실행
-4. Kafka Connect Schema : Connector 개발 시 사용하기도 하지만, 기존 Connector 사용시에도 활용. 데이터의 타입 안전성을 보장하는 메타데이터.
-5. Source Connector : 데이터를 읽어서 Kafka로 전송할 때, 나중에 Sink가 올바르게 쓸 수 있도록 타입 정보를 Schema로 만들어 데이터와 함께 전달. Schema 없이 보내면 타입 안정성이 없어져 Sink에서 런타임 에러 발생 가능.
-6. Sink Connector : 받은 Schema를 보고 대상 시스템(DB 등)의 타입에 맞게 데이터를 변환하여 저장
-7. 스키마는 데이터 구조와 타입을 정의하며, 시스템 간 데이터 통합과 일관성 유지에 중요함
+4. Source connector : 외부 시스템에서 데이터를 가져와 Kafka Topic으로 쓰는 역할 , 외부시스템 -> Kafka
+5. Sink connector : Kafka Topic에서 데이터를 읽어서 외부 시스템으로 전달.
+6. Kafka Connect Schema : Connector 개발 시 사용하기도 하지만, 기존 Connector 사용시에도 활용. 데이터의 타입 안전성을 보장하는 메타데이터.
+7. Source Connector : 데이터를 읽어서 Kafka로 전송할 때, 나중에 Sink가 올바르게 쓸 수 있도록 타입 정보를 Schema로 만들어 데이터와 함께 전달. Schema 없이 보내면 타입 안정성이 없어져 Sink에서 런타임 에러 발생 가능.
+8. Sink Connector : 받은 Schema를 보고 대상 시스템(DB 등)의 타입에 맞게 데이터를 변환하여 저장
+9. 스키마는 데이터 구조와 타입을 정의하며, 시스템 간 데이터 통합과 일관성 유지에 중요함
+10. Config Definitions를 통해 Connector가 어떤 설정을 받아들일 수 있는지에 대한 명세를 만들 수 있음. 필수 및 선택적 파라미터를 포함하고 기본값을 제공하여 커넥터 설정을 간소화함.
+11. ConfigDef configDef = new ConfigDef().define("database.hostname", Type.STRING, Importance.HIGH, "Database hostname");
+12. Single Message Transforms는 kafka Connect에서 데이터를 필터링하고 변환하는데 사용되는 핵심 기능. SMT는 Connector 구성에서 설정 할 수 있음.
+13. Source Connector는 Kafka에 쓰기 전에, Sink Connector는 대상 시스템에 쓰기 전에 메시지를 변환함. Mask Field, 특정 조건의 레코드 필터링, 민감한 정보가 포함된 필드를 제거하거나 이름 변경을 할 수 있음.
+14. DLQ : Dead Letter Queue. 처리 실패한 메시지를 별도의 토픽에 저장하여 메시지를 안전하게 보관하고 나중에 재처리
+15. {"errors.tolerance": "all","errors.deadletterqueue.topic.name": "my-dlq"} 이런식으로 설정만 하면 DLQ가 작동하도록 기능이 내장돼있음.
+16. Exponential Backoff : 지수백오프란 1초 후 재시도, 2초후 재시도 ,4 초후 재시도 .....60초후 재시도 이런식으로 시간제한을 두면서 재시도 하여 시스템 회복 시간 및 부하를 줄이는 시도 방법
 
 
 ## Kafka KSQL
@@ -382,6 +402,8 @@ ___
 8. ksql 서버가 계속 살아있는동안 백그라운드에서 쿼리가 실행되면서 동작함.
 9. Interactive : CLI 또는 REST API, 통해 대화형으로 실시간 쿼리 실행
 10. Kafka Streams 라이브러리 데이터 집계는 개발자 한정, 컴파일,빌드,배포 코드 수정 등 작업이 필요. 반면 KSQL을 통해서 간단하게 데이터 연산/집계.
+11. KEY에 INT BIGINT VARCHAR 다 가능. BOOLEAN , INT , BIGINT , DOUBLE , DECIMAL , VARCHAR , BYTES , ARRAY, MAP, STRUCT , TIME, DATE, TIMESTAMP
+12. KStream-to-KStream 조인만이 windowed join을 지원(필수).
 
 
 ## Avro
@@ -389,9 +411,15 @@ ___
 1. Avro는 바이너리 데이터 직렬화 형식임. (protobuf, json ...)
 2. 스키마 기반, 바이너리 포맷, kafka 생태계에서 널리 사용.
 3. "type" : "record" 라는 key-value가 필수임. "fields" 배열안에 여러 필드가 있음.
-3. Avro Logical Type이란 기본 타입을(int, long, string 등) 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것.
-4. decimal(소수점), date(날짜), timestamp(시간) 등
-5. Apache Avro 공식 스펙에 따르면 논리 타입은 하이픈(-)으로 구분 (timestamp-millis, timestamp-micros, time-millis, local-timestamp-millis)
+4. Avro는 데이터를 다루는 두 가지 주요 방식을 제공함. Specific Record, Generic Record
+5. Specific Record : 스키마로부터 자동 생성된 Java 클래스를 사용하여 컴파일 안전성과 성능 최적화를 위해 사용.
+6. Generic Record : 런타임에 스키마를 동적으로 로드하여 사용. 데이터를 유연하게 처리하는 것.
+7. ex ) Avro 스키마 기반으로 데이터 객체를 만들때
+8. User user = new User(); user.setId(1); user.setName(""); Specific Record
+9. GenericRecord user = new GenericData.Record(schema); user.put("id",1); user.put("name", "")l
+10. Avro Logical Type이란 기본 타입을(int, long, string 등) 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것.
+11. decimal(소수점), date(날짜), timestamp(시간) 등
+12. Apache Avro 공식 스펙에 따르면 논리 타입은 하이픈(-)으로 구분 (timestamp-millis, timestamp-micros, time-millis, local-timestamp-millis)
 
 
 ## Kafka Testing
