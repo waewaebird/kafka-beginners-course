@@ -130,8 +130,8 @@ ___
 10. 컨슈머 그룹에 새로운 멤버가 참여하거나, 컨슈머가 장애로 HeartBeat 전송에 실패하거나, Consuming하고 있는 파티션 갯수가 증가하면 Kafka Consumer Rebalance(컨슈머그룹의 멤버가 소비하는 토픽의 리밸런싱)가 발생한다. 
 11. 각 컨슈머 그룹마다 Group Coordinator가 할당되어(해쉬 로직으로 선정) 해당 그룹의 offset을 관리함. Group별 관리를 통해 효율성과 신뢰성을 높임.
 12. Consumer Group Coordinator는 cluster의 Broker 중 한대가 관리 역할을 맡는거임.
-13. 그룹 멤버 관리, Consumer Leader 선정, 파티션 할당 정보 다른 consumer 들에게 전달, consumer 상태 모니터링, 오프셋 저장관리, 리밸런스 관장
-14. Consumer Leader는 consumer 인스턴 중 하나로, 파티션 할당 전략(예: RangeAssignor, RoundRobinAssignor 등) 에 따라 consumer에게 파티션을 할당하고 Group Coordinator에가 내용 전달.
+13. Consumer Group Coordinator 그룹 멤버 관리, Consumer Leader 선정, 파티션 할당 정보 다른 consumer 들에게 전달, consumer 상태 모니터링, __consumer_offsets 토픽 저장관리, 리밸런스 관장
+14. Consumer Leader는 consumer Group의 인스턴스 중 하나로, 파티션 할당 전략(예: RangeAssignor, RoundRobinAssignor 등) 에 따라 consumer에게 파티션을 할당하고 Group Coordinator에게 내용 전달.
 15. Consumer Rebalance에는 Eager와 Cooperative가 있음
 16. Eager는 Stop the world를 발생시킴. 모든 파티션을 회수한 후 전체 재할당. 다운타임 발생.
 17. Cooperative 영향받는 소수의 파티션만 재할당. 점진적 리밸런싱으로 다운타임 최소화. Consumer Group 전체에서 안정적인 파티션 할당이 이루어질 때까지 부분 재조정을 여러번 반복할 수 있음 
