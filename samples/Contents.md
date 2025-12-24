@@ -340,18 +340,26 @@ ___
 4. props.put("schema.registry.url", "http://localhost:8081"); 로 등록해줘야함. 
 5. Producer/Consumer, Kafka Connect, Kafka Streams, ksqlDB 등 Kafka와 데이터를 주고받는 모든 컴포넌트에서 사용 가능
 6. 스키마 중앙 저장 및 버전 관리, 스키마 등록 및 검증, 조회 및 역직렬화, 호환선 검증 등.
-7. 호환성 체크를 켜두면 Schema Registry에서 호환성모드(Forward, Backward, Full, None)에 따라서 막아줌.
-8. Forward Compatibility(전방) : 이전 스키마로 새 데이터 읽기 가능. Producer 먼저 업그레이드 해야함.
-9. 새 데이터에 phone필드가 있으면 스키마는 phone을 모름. 그렇기 때문에 스키마가 그냥 phone을 무시하고 데이터를 읽어야 함.
-10. phone 필드에 optional/default가 있어야 무시 가능. 새 필드 추가할 때 Default값이 있어야 함 
-11. Backward Compatibility(후방) : 새 스키마로 이전 데이터 읽기 가능.  Consumer 먼저 업그레이드 해야함
-12. 이전 데이터에 phone필드가 없는데, 새 스키마는 phone을 기대함
-13. 없는 필드를 default로 채워서 읽을 수 있어야 함. 새필드에 default를 채움
-14. 둘의 차이는 필드 삭제할 때 나옴.
-15. Forward: 필드 삭제 가능 (이전 스키마로 새 데이터(삭제된 필드 없음)를 읽을 때 그냥 default로 채우면 됨)
-16. Backward: 필드 삭제 불가 (새 스키마로 이전 데이터(삭제된 필드 있음)를 읽을 수 없으니)
-17. Full Compatibility(전체 호환성) : 둘다 만족. 양방향 호환성 보장을 위해 기본값(default)이 있는 필드만 추가하거나 제거할 수 있음.
-18. 스키마 호환성 파괴(Breaking Compatibility)는 스키마를 잘못 변경하여 이전버전과 최신 버전이 서로의 데이터를 읽을 수 없게 되는 상황을 의미.
+7. 호환성 체크를 켜두면 Schema Registry에서 호환성모드(Forward, Backward, Full, None)에 따라서 막아줌. 
+8. 스키마 호환성 체크 = 무중단 배포를 위한 안전장치
+9. 무중단 배포를 위해선? Consumer 혹은 Producer 둘중에 뭐부터 점진적으로 업그레이드 해야할까?
+10. Consumer 먼저? Backward / Producer 먼저? Forward 각각 개념이 나옴.
+11. Compatibility는 Schema Registry에 새 스키마를 등록할 때 검증하는 규칙.
+12. ex) Backward로 모드를 설정 -> V2 스키마를 등록하려고 시도 -> Schema Registry에서 직접 Backward 호환성 체크
+13. V2로 V1을 읽을 수 있나? (Backward Compatibility(후방))
+14. V2에 필드 추가 : 기본값(default) 있으면 통과
+15. V2에서 기존 필드 삭제 : 그냥 항상 통과, V2에서 그냥 무시해버리면 됨
+16. 필드 타입 , 필드 이름 변경은 그냥 모두 실패.
+17. 체크 통과하면 -> V2 스키마 등록 성공 -> Consumer를 먼저 V2로 전환하는 배포 전략
+18. ex) Forward로 모드를 설정 -> V2 스키마를 등록하려고 시도 -> Schema Registry에서 직접 Forward 호환성 체크
+19. V1으로 V2를 읽을 수 있나? (Forward Compatibility(전방))
+20. V2에 필드 추가 : 그냥 항상 통과, V1 Consumer가 그냥 V2의 새필드를 무시하면 됨
+21. V2에서 기존 필드 삭제 : V1에 있던 필드가 기본값(default)를 가지고 있으면 통과
+22. 필드 타입 , 필드 이름 변경은 그냥 모두 실패.
+23. 체크 통과하면 -> V2 스키마 등록 성공 -> Producer를 먼저 V2로 전환하는 배포 전략
+24. Full Compatibility(전체 호환성) : Backward + Forward 둘 다 만족. 가장 제약이 많지만 가장 안전. 기본값 있는 필드 추가/삭제만 가능.
+25. None : 호황성 체크 안함. 아무 스키마나 막 등록.
+26. 스키마 호환성 파괴(Breaking Compatibility)는 스키마를 잘못 변경하여 이전버전과 최신 버전이 서로의 데이터를 읽을 수 없게 되는 상황을 의미.
    
 
 ## Confluent REST Proxy
@@ -363,11 +371,11 @@ ___
 5. Producer Http Client : Rest Proxy서버에 바이너리 데이터를 base64로 인코딩하여 전송
 6. Rest Proxy : base64문자열을 디코딩 하여 바이트로 변환. Kafka Topic에 데이터 저장
 7. Rest Proxy : Kafka Topic에서 바이너리 데이터를 읽어서 base64인코딩 및 전송
-7. Consumer Http Client : base64데이터를 받아 디코딩하여 원본 바이너리로 복원
-8. HTTP Client → base64 인코딩 → REST Proxy → base64 디코딩 → Kafka Topic(바이너리) → REST Proxy → base64 인코딩 → HTTP Client
-9. Kafka client는 더 빠른 바이너리 프로토콜을 사용하고 배치 처리 최적화가 되어 있음.
-10. 멱등성 확보, 트랜젝션 사용, 다양한 기능 사용에 있어서 더 편리하기 때문에 저빈도 또는 아주 간략한 프로젝트 아닌이상 client 쓰는게 훨씬 이점이 많음.
-11. Request 요청을 보낼 때 Content-type은 항상 v2로 하는것이 권장됨. v2로 하는것이 최신 규격에 맞는 올바른 설정
+8. Consumer Http Client : base64데이터를 받아 디코딩하여 원본 바이너리로 복원
+9. HTTP Client → base64 인코딩 → REST Proxy → base64 디코딩 → Kafka Topic(바이너리) → REST Proxy → base64 인코딩 → HTTP Client
+10. Kafka client는 더 빠른 바이너리 프로토콜을 사용하고 배치 처리 최적화가 되어 있음.
+11. 멱등성 확보, 트랜젝션 사용, 다양한 기능 사용에 있어서 더 편리하기 때문에 저빈도 또는 아주 간략한 프로젝트 아닌이상 client 쓰는게 훨씬 이점이 많음.
+12. Request 요청을 보낼 때 Content-type은 항상 v2로 하는것이 권장됨. v2로 하는것이 최신 규격에 맞는 올바른 설정
 
 
 ## Kafka Connect
