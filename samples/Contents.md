@@ -151,6 +151,11 @@ ___
 31. fetch.min.bytes : 네트워크 레벨에서 consumer가 broker로부터 받을 최소 데이터 양을 지정. 큰 값으로 설정하면 처리량이 증가함. props.put("fetch.min.bytes", "1048576");
 32. fetch.max.wait.ms : fetch.min.bytes 크기에 도달하기 전까지 broker가 대기하는 최대시간.
 33. max.poll.records : 애플리케이션 레벨에서 poll() 메서드 한번 호출시 반환되는 최대 레코드 수. 브로커로부터 데이터를 전달 받은 상황에서 내부 버퍼에 저장 후 갯수만큼만 전달. props.put("max.poll.records", "100"); // 100개씩만 주기
+34. max.partition.fetch.bytes : 하나의 파티션에서 한 번의 fetch 요청으로 가져올 수 있는 최대 데이터 크기
+35. Static Membership: group.instance.id 설정 - props.put("group.instance.id", "consumer-1") , subscribe()와 함께 사용
+36. 연결이 끊겨도 리밸런싱 안함(session.timeout 동안 대기) , 파티션 할당 그대로 유지, 재연결 시 같은 파티션 자동 재할당 그래서 Local Cache 그대로 사용가능.
+37. consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition("topic", 0), timestamp)); 를 통해 시간 기반으로 메시지 읽기가 가능.
+38. .timeindex 파일 기반으로 매핑하여 데이터를 빠르게 찾을 수 있음.
 
 
 ## Kafka Core Concepts
@@ -272,64 +277,77 @@ ___
 9. 효과적인 Kafka 데이터 파이프 라인은 파티션 수와 kafka Streams의 인스턴스 수를 함께 조정.
 10. 파티션 증가 -> 병렬 처리 단위 증가 + 인스턴스 증가 -> 분산 처리 능력 향상 => 처리량 개선 및 처리 시간 단축
 11. 데이터를 바라보는 관점에서 KStream, KTable이 있음.
-12. KStream은 모든 레코드를 독립적인 이벤트로 인식. 이벤트 스트림. ex) 은행 거래 내역
-13. KTable은 현재 상태만 보존하는것. 상태 테이블. ex) 계좌 잔액
-14. Kafka Topic(Data Source)에서 KStream 또는 KTable로 읽어와서 처리/변환 후 다른 Topic으로 보내버림.
-15. State Stores : Kafka Streams의 stateful연산을 지원하는 핵심 구성요소. 기본적으로 RocksDB(Persistent)로 구현된 디스크 기반 state store를 사용, 인메모리 스토어도 사용할 수 있음.
-16. Changelog topics : Persistent state stores를 자동으로 백업하여 Kafka Streams의 상태를 내결함성으로 만듭니다. 모든 state store는 changelog 토픽으로 백업되며, 상태를 복원할 수 있다.
-17. Kafka Streams를 처리하는 두 가지 방식에는 DSL과 ProcessorAPI가 있음
-18. DSL은 간단한 코드로 데이터를 처리할 수 있음. 예를들어 filter(), map(), join() 등
-19. join : KStream/KTable을 결합하는 연산. SQL의 join과 비슷함. Stateful 연산으로 Task 내부 State Store에 매칭에 필요한 데이터를 저장함.
-20. KStream-KStream : 양쪽 데이터를 State Store에 저장하고 매칭 대기(Join Window설정 필수)
-21. KStream-KTable : KTable은 이미 저장되어 있어 즉시 조회 가능 
-22. KTable-KTable : 양쪽 모두 State Store에 저장되어 있음
-23. 여러가지 집계 / 연산 기능을 제공. 스트림으로 들어오는 다양한 데이터를 실시간으로 집계 / 연산하는 기능. Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
-24. Re-partitioning : Key 변경 시 데이터를 새 파티션에 재배치하는 과정
-25. selectKey : Key 변경 + 재분할 "필요" 표시 실제 재분할은 아직 안함. (Stateless) 
-26. groupByKey :  실제 재분할 실행. 레코드를 키별로 그룹화하여 내부 토픽 생성하여 데이터 재배치 (Stateful)
-27. mapValues : Key는 유지한채 Value만 원하는 형태로 변환 (toUpperCase, parsJson, ...) (Stateless)
-28. reduce : 여러 개의 데이터들을 하나로 집계/축약, 같은 타입으로만 리턴(Integer to Integer) (Stateful)
-29. aggregate + custom aggregator : key별 합계, 평균 등 커스텀 집계 로직을 정의하여 사용할 수 있음(sum, min, max), 다른 타입으로 리턴 가능(Integer to Object) (Stateful)
-30. count : key별 이벤트 횟수 세기 (Stateful)
-31. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful). 데이터는 계속해서 흘러들오기 때문에 특정 시간 범위로 끊을때 사용함.
-32. 집계 : groupByKey() -> windowedBy() -> aggregate / count / reduce => 결과는 무조건 KTable로 나옴. (현재까지의 집계 결과, 집계는 누적된 상태를 유지)
-33. join : KStream - KStream join시 JoinWindow로 시간 범위 지정. Join 된 새로운 KStream 이벤트가 생성
-34. Tumbling Window : 고정시간 (분,시간,일 등) 단위로 시간겹침 없이 집계.(1-3, 4-6, 7-9, ...)
-35. Hopping Window : 고정크기 윈도우를 일정 간격으로 점프. 중첩시간 있음. (1-3, 3-5, 5-7, ...)
-36. Sliding Window :  이벤트를 중심으로 +-N 시간 범위 내의 다른 스트림 이벤트를 찾아 Join. (주문 03시 발생 시 01~05시 사이 결제를 자동 매칭) 
-37. Session Window : 비활동 시간(Gap) 으로 구분해서 사용자 활동 패턴 추적. 활동 있으면 세션 유지, Gap시간 동안 비활동 시 세션 종료. 사용자 기준 세션이라 크기가 동적임.
-38. Tumbling, Hopping, Sliding Windows 등 시간 기반 윈도우는 도착 유예 기간을 제공하여 늦은 데이터도 윈도우 집계에 포함한다. 이를 통해 더 정확하고 포괄적인 데이터 처리 보장을 한다. 
-39. flatMapValues : 하나의 key에 대해 value를 여러개로 쪼개는 무상태 변환 오퍼레이터 (Stateless).
-40. key="order123", value={items: [item1, item2, item3]} /  key="order123", value=item1 key="order123", value=item2 key="order123", value=item3 로 분리.
-41. branch : 하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄. (Stateless)
-42. "TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌.
-43. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현) DSL을 대체할 수 있음.
-44. Interactive Queries는 stateful 오퍼레이터를 통해 저장된 state store 내부를 조회하는 기능. REST API 방식으로 내부 상태를 조회할 수 있음.
-45. KafkaStreams는 to("Topic")을 통해 다른 토픽으로 결과를 전송하여 다운스트림 파이프라인을 구축하기도 하고, Interactive Queries를 통해 state store를 직접 조회하여 실시간 응답을 제공하기도 함.
-46. 토픽 방식이 더 표준적이고 안전함. Interactive Queries는 특수케이스용(디버깅, 임시 데이터, 초저지연 조회)
-47. Kafka Streams 모니터링 4가지 메트릭 데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
-48. Metrics 객체가 있음 streams.metrics(), metric 인스턴스의 이름을 체크하여 출력.
-49. process-rate : 초당 처리 레코드 수
-50 .process-latency : 레코드 하나 처리 시간
-51. commit-rate : 초당 커밋 횟수
-52. commit-latency : 커밋 작업에 걸리는 시간
-53. props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-54. props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-55. Key는 String으로 직렬화/역직렬화 Value도 String으로 직렬화/역직렬화 별도로 지정하지 않으면 이 설정이 자동 적용
-56. Kafka Streams에서의 에러처리 전략
-58. Fail-fast : 기본동작. 에러 발생시 애플리케이션 즉시 중단. deserialization 에러, processing 에러 등에서 발생할 수 있음
-59. Log-and-continue : 로그로 기록하고 계속 진행.  deserialization 에러에만 적용. props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
-60. Custom exception handling : 에러 유형별로 다른 exception handler를 설정할 수 있음
-61. peek() 메소드는 비변환 연산으로 스트림을 수정하지 않고 데이터를 검사할 수 있는 기회를 제공. 디버깅 로깅 모니터링에서 주로 쓰임
-62. Exactly-Once Semantics(EOS)는 메시지가 정확히 한 번만 처리되는 것을 보장하는 기능. 중복처리X, 데이터손실X
-63. At-Most-Once 최대한번(데이터 손실 가능, 중복 없음) , At-Least-Once 최소한번(데이터 손실 없음, 중복 가능) , Exactly-Once 정확히 한번(데이터 손실 없음, 중복 없음)
-64. KafkaStreams는 읽기, 처리, 쓰기 , output-topic Offset Commit의 4가지 단계
-65. KStream<String, String> input = builder.stream("input-topic"); // 읽기
-66. KStream<String, String> processed = input.filter((key, value) -> value.length() > 5).mapValues(value -> value.toUpperCase()); // 처리
-67. processed.to("output-topic"); // 쓰기
-68. input-topic의 offset을 커밋해서 완료시킴.
-69. BEGIN TRANSACTION  ①input-topic에서 offset 100번 메시지 읽기 ②데이터 처리 (필터링, 변환 등) ③output-topic에 결과 쓰기 ④input-topic의 offset을 101로 커밋 COMMIT TRANSACTION
-70. props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2); 설정을 통해 활성화 할 수 있음
+12. KStream은 모든 레코드를 독립적인 이벤트로 인식. 이벤트 스트림.
+13. 같은 키로 여러 레코드가 들어오면 모두 보관. 은행 거래 내역처럼 무슨 일이 일어났는지의 기록
+14. KStream<String, String> stream = builder.stream("user-events");
+15. Key: "user1", Value: "login"
+16. Key: "user1", Value: "click"  
+17. Key: "user1", Value: "logout"
+18. → 3개 레코드 모두 처리됨
+19. KTable은 현재 상태만 보존하는것. 상태 테이블. ex) 계좌 잔액
+20. 같은 키로 새 레코드가 들어오면 이전 값을 덮어 씀.
+21. 계좌 잔액 처럼 현재 어떤 상태인지
+22. KTable<String, String> table = builder.table("user-status");
+23. Key: "user1", Value: "online"
+24. Key: "user1", Value: "away"
+25. Key: "user1", Value: "offline"
+26. → 마지막 "offline"만 유지됨
+27. Kafka Topic(Data Source)에서 KStream 또는 KTable로 읽어와서 처리/변환 후 다른 Topic으로 보내버림.
+28. State Stores : Kafka Streams의 stateful연산을 지원하는 핵심 구성요소. 기본적으로 RocksDB(Persistent)로 구현된 디스크 기반 state store를 사용, 인메모리 스토어도 사용할 수 있음.
+29. Changelog topics : Persistent state stores를 자동으로 백업하여 Kafka Streams의 상태를 내결함성으로 만듭니다. 모든 state store는 changelog 토픽으로 백업되며, 상태를 복원할 수 있다.
+30. Kafka Streams를 처리하는 두 가지 방식에는 DSL과 ProcessorAPI가 있음
+31. DSL은 간단한 코드로 데이터를 처리할 수 있음. 예를들어 filter(), map(), join() 등
+32. join : KStream/KTable을 결합하는 연산. SQL의 join과 비슷함. Stateful 연산으로 Task 내부 State Store에 매칭에 필요한 데이터를 저장함.
+33. KStream-KStream : 양쪽 스트림 데이터를 모두 State Store에 저장. Window 시간 동안만 저장 (예: 5분 설정하면 5분간만 보관). Window 시간이 지나면 자동 삭제
+34. KStream-KTable : KTable은 이미 저장되어 있어 즉시 조회 가능
+35. KTable-KTable : 양쪽 모두 State Store에 저장되어 있음. 양쪽 테이블이 이미 최신 상태를 유지중이라 즉시 join 가능
+36. 여러가지 집계 / 연산 기능을 제공. 스트림으로 들어오는 다양한 데이터를 실시간으로 집계 / 연산하는 기능. Kafka Streams의 집계연산은 즉시 자동으로 집계 되고, 들어오면 자동으로 처리됨
+37. Re-partitioning : Key 변경 시 데이터를 새 파티션에 재배치하는 과정
+38. selectKey : Key 변경 + 재분할 "필요" 표시 실제 재분할은 아직 안함. (Stateless) 
+39. groupByKey :  실제 재분할 실행. 레코드를 키별로 그룹화하여 내부 토픽 생성하여 데이터 재배치 (Stateful)
+40. mapValues : Key는 유지한채 Value만 원하는 형태로 변환 (toUpperCase, parsJson, ...) (Stateless)
+41. reduce : 여러 개의 데이터들을 하나로 집계/축약, 같은 타입으로만 리턴(Integer to Integer) (Stateful)
+42. aggregate + custom aggregator : key별 합계, 평균 등 커스텀 집계 로직을 정의하여 사용할 수 있음(sum, min, max), 다른 타입으로 리턴 가능(Integer to Object) (Stateful)
+43. count : key별 이벤트 횟수 세기 (Stateful)
+44. windowed by : 시간 기반으로 데이터를 윈도우 단위로 그룹화(Stateful). 데이터는 계속해서 흘러들오기 때문에 특정 시간 범위로 끊을때 사용함.
+45. 집계 : groupByKey() -> windowedBy() -> aggregate / count / reduce => 결과는 무조건 KTable로 나옴. (현재까지의 집계 결과, 집계는 누적된 상태를 유지)
+46. join : KStream - KStream join시 JoinWindow로 시간 범위 지정. Join 된 새로운 KStream 이벤트가 생성
+47. Tumbling Window : 고정시간 (분,시간,일 등) 단위로 시간겹침 없이 집계.(1-3, 4-6, 7-9, ...)
+48. Hopping Window : 고정크기 윈도우를 일정 간격으로 점프. 중첩시간 있음. (1-3, 3-5, 5-7, ...)
+49. Sliding Window :  이벤트를 중심으로 +-N 시간 범위 내의 다른 스트림 이벤트를 찾아 Join. (주문 03시 발생 시 01~05시 사이 결제를 자동 매칭) 
+50. Session Window : 비활동 시간(Gap) 으로 구분해서 사용자 활동 패턴 추적. 활동 있으면 세션 유지, Gap시간 동안 비활동 시 세션 종료. 사용자 기준 세션이라 크기가 동적임.
+51. Tumbling, Hopping, Sliding Windows 등 시간 기반 윈도우는 도착 유예 기간을 제공하여 늦은 데이터도 윈도우 집계에 포함한다. 이를 통해 더 정확하고 포괄적인 데이터 처리 보장을 한다. 
+52. flatMapValues : 하나의 key에 대해 value를 여러개로 쪼개는 무상태 변환 오퍼레이터 (Stateless).
+53. key="order123", value={items: [item1, item2, item3]} /  key="order123", value=item1 key="order123", value=item2 key="order123", value=item3 로 분리.
+54. branch : 하나의 스트림에 있는 Record를  -> Branch [조건 체크]를 통해 -> 여러 스트림으로 보냄. (Stateless)
+55. "TextLinesTopic" 이라는 토픽에서 읽어 들어와서 split하고 word로 groupBy해서 숫자세고, "WordsWithCountsTopic"이라는 것으로 카운팅 데이터를 넘겨줌.
+56. ProcessorAPI는 프로그래머가 직접 로직을 구현하는것. Processor Interface 구현해서 로직 작성 해야함(필수 구현) DSL을 대체할 수 있음.
+57. Interactive Queries는 stateful 오퍼레이터를 통해 저장된 state store 내부를 조회하는 기능. REST API 방식으로 내부 상태를 조회할 수 있음.
+58. KafkaStreams는 to("Topic")을 통해 다른 토픽으로 결과를 전송하여 다운스트림 파이프라인을 구축하기도 하고, Interactive Queries를 통해 state store를 직접 조회하여 실시간 응답을 제공하기도 함.
+59. 토픽 방식이 더 표준적이고 안전함. Interactive Queries는 특수케이스용(디버깅, 임시 데이터, 초저지연 조회)
+60. Kafka Streams 모니터링 4가지 메트릭 데이터 처리와 커밋 작업의 효율성과 속도에 대한 인사이트를 제공함. 최적의 성능으로 실행되고 있음을 보장하는데 도움이 됨.
+61. Metrics 객체가 있음 streams.metrics(), metric 인스턴스의 이름을 체크하여 출력.
+62. process-rate : 초당 처리 레코드 수
+63 .process-latency : 레코드 하나 처리 시간
+64. commit-rate : 초당 커밋 횟수
+65. commit-latency : 커밋 작업에 걸리는 시간
+66. props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+67. props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+68. Key는 String으로 직렬화/역직렬화 Value도 String으로 직렬화/역직렬화 별도로 지정하지 않으면 이 설정이 자동 적용
+69. Kafka Streams에서의 에러처리 전략
+70. Fail-fast : 기본동작. 에러 발생시 애플리케이션 즉시 중단. deserialization 에러, processing 에러 등에서 발생할 수 있음
+71. Log-and-continue : 로그로 기록하고 계속 진행.  deserialization 에러에만 적용. props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+72. Custom exception handling : 에러 유형별로 다른 exception handler를 설정할 수 있음
+73. peek() 메소드는 비변환 연산으로 스트림을 수정하지 않고 데이터를 검사할 수 있는 기회를 제공. 디버깅 로깅 모니터링에서 주로 쓰임
+74. Exactly-Once Semantics(EOS)는 메시지가 정확히 한 번만 처리되는 것을 보장하는 기능. 중복처리X, 데이터손실X
+75. At-Most-Once 최대한번(데이터 손실 가능, 중복 없음) , At-Least-Once 최소한번(데이터 손실 없음, 중복 가능) , Exactly-Once 정확히 한번(데이터 손실 없음, 중복 없음)
+76. KafkaStreams는 읽기, 처리, 쓰기 , output-topic Offset Commit의 4가지 단계
+77. KStream<String, String> input = builder.stream("input-topic"); // 읽기
+78. KStream<String, String> processed = input.filter((key, value) -> value.length() > 5).mapValues(value -> value.toUpperCase()); // 처리
+79. processed.to("output-topic"); // 쓰기
+80. input-topic의 offset을 커밋해서 완료시킴.
+81. BEGIN TRANSACTION  ①input-topic에서 offset 100번 메시지 읽기 ②데이터 처리 (필터링, 변환 등) ③output-topic에 결과 쓰기 ④input-topic의 offset을 101로 커밋 COMMIT TRANSACTION
+82. props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2); 설정을 통해 활성화 할 수 있음
 
 
 ## Confluent Schema Registry
@@ -343,7 +361,7 @@ ___
 7. 호환성 체크를 켜두면 Schema Registry에서 호환성모드(Forward, Backward, Full, None)에 따라서 막아줌. 
 8. 스키마 호환성 체크 = 무중단 배포를 위한 안전장치
 9. 무중단 배포를 위해선? Consumer 혹은 Producer 둘중에 뭐부터 점진적으로 업그레이드 해야할까?
-10. Consumer 먼저? Backward / Producer 먼저? Forward 각각 개념이 나옴.
+10. Consumer 먼저? = Backward , Producer 먼저? = Forward 각각 개념이 나옴.
 11. Compatibility는 Schema Registry에 새 스키마를 등록할 때 검증하는 규칙.
 12. ex) Backward로 모드를 설정 -> V2 스키마를 등록하려고 시도 -> Schema Registry에서 직접 Backward 호환성 체크
 13. V2로 V1을 읽을 수 있나? (Backward Compatibility(후방))
@@ -441,4 +459,5 @@ ___
 2. failed_authentication_total (실패한 인증 시도를 모니터링하는 지표로, 보안 이벤트 감지에 중요)
 3. Access Control List (Access Control List 관리)
 4. SASL (Simple Authentication and Security Layer 카프카 인증 매커니즘 작동 여부 확인)
-5. ssl_handshake_rate (암호화된 연결 설정 상태 모니터링)
+5. Kafka가 지원하는 SASL 매커니즘에는 SASL/PLAINTEXT (SASL/PLAIN), SASL/GSSAPI (Kerberos) , SASL/SCRAM , SASL/OAUTHBEARER 등이 있다.
+6. ssl_handshake_rate (암호화된 연결 설정 상태 모니터링)
