@@ -79,12 +79,15 @@ aggregation <details><summary></summary>집합, 집계</details>
 retrieval <details><summary></summary>검색</details>  
 facilitate <details><summary></summary>가능하게하다, 촉진하다</details>  
 implications <details><summary></summary>영향, 결과</details>  
+topology <details><summary></summary>위상, 배치구조, 망 구성도</details>
+resolving <details><summary></summary>해결</details>
+durability <details><summary></summary>내구성</details>
 
 
 
 37/60  23   61  
 41/60  19   68  
-40/60  20   66  
+39/60  21   65  
 
 
 
