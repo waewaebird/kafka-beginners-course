@@ -74,6 +74,7 @@ ___
 12. 장애 복구시 Zookeeper에서는 재선출이 필요해서 느리지만, Kraft에서는 빠르게 증시 승격
 13. 파티션의 리더 Broker가 In Sync Replicas, follower 모니터링
 14. Broker의 성능을 유지하기 위해선 Throughput, Latency/Responsiveness, Data Transfer Capability, Resource Utilization의 균형있는 관리가 중요.
+15. message.max.bytes : 카프카 broker가 수신할 수 있는 단일 메시지의 최대크기를 제한.
 
 
 ## Kafka Producers
@@ -91,7 +92,7 @@ ___
 11. acks=1 리더 파티션에 저장되면 buffer.memory 해제
 12. acks=all(-1) 리더와 팔로워에 대한 응답을 받으면 버퍼를 해제함.
 13. producer의 callback은 프로듀서가 메시지를 전송 한 후 그 결과를 비동기적으로 받아서 처리할 수 있게 해주는 매커니즘.
-14. callback또한 acks설정 값에 따라 호출되는 시점이 달라진다.
+14. callback또한 acks설정 값에 따라 호출되는 시점이 달라진다. acks는 메시지 쓰기가 성공한 것으로 간주하기 위해 브로커로부터 받아야 하는 승인 수준/
 15. Idempotent Producer는 프로듀서와 브로커 간의 문제. 프로듀서가 토픽/파티션에 메시지를 쓸 때 중복을 방지하는 메커니즘. 
 16. 멱등성은 프로듀서가 재시도로 동일한 메시지를 여러 번 전송하더라고 메시지가 파티션에 정확히 한 번만 전달되도록 보장하여 중복을 방지. 순서 보장.
 17. 프로듀서 측에서의 데이터 안정성 보장은 properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")해 달성 가능.
@@ -114,6 +115,7 @@ ___
 34. 토픽 레벨에서도 설정가능하지만 일반적이는 않음.
 35. consumer는 메시지에 포함된 특수 헤더를 인식하여 합축을 해제. 컨슈머 측에서 압축 타입과 관련된 설정을 하지 않아도 처리 가능함.
 36. gzip, snappy, lz4, zstd 압축 타입이 있음. default는 none. 
+37. max.request.size : 단일 요청의 최대크기를 제한. Producer가 broker에게 보내는 전체 요청 크기.
 
 
 ## Kafka Consumers
@@ -150,12 +152,13 @@ ___
 30. 만약 처리 시간이 오래걸리는 복잡한 메시지 처리 로직이 있다면 max.poll.interval.ms를 증가시켜 처리시간을 충분히 확보해야함.
 31. fetch.min.bytes : 네트워크 레벨에서 consumer가 broker로부터 받을 최소 데이터 양을 지정. 큰 값으로 설정하면 처리량이 증가함. props.put("fetch.min.bytes", "1048576");
 32. fetch.max.wait.ms : fetch.min.bytes 크기에 도달하기 전까지 broker가 대기하는 최대시간.
-33. max.poll.records : 애플리케이션 레벨에서 poll() 메서드 한번 호출시 반환되는 최대 레코드 수. 브로커로부터 데이터를 전달 받은 상황에서 내부 버퍼에 저장 후 갯수만큼만 전달. props.put("max.poll.records", "100"); // 100개씩만 주기
+33. max.poll.records : 애플리케이션 레벨에서 poll() 메서드 한번 호출시 반환되는 최대 레코드 수. 브로커로부터 데이터를 전달 받은 상황에서 내부 버퍼에 저장 후 갯수만큼만 전달. props.put("max.poll.records", "100"); // 100개씩만 주기 , 처리량과 처리시간에 영향을 미침
 34. max.partition.fetch.bytes : 하나의 파티션에서 한 번의 fetch 요청으로 가져올 수 있는 최대 데이터 크기
 35. Static Membership: group.instance.id 설정 - props.put("group.instance.id", "consumer-1") , subscribe()와 함께 사용
 36. 연결이 끊겨도 리밸런싱 안함(session.timeout 동안 대기) , 파티션 할당 그대로 유지, 재연결 시 같은 파티션 자동 재할당 그래서 Local Cache 그대로 사용가능.
 37. consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition("topic", 0), timestamp)); 를 통해 시간 기반으로 메시지 읽기가 가능.
 38. .timeindex 파일 기반으로 매핑하여 데이터를 빠르게 찾을 수 있음.
+39. auto.commit.interval.ms : enable.auto.commit=true일때 , 여기에 설정한 시간마다 자동으로 offset commit. props.put("auto.commit.interval.ms", "1000");
 
 
 ## Kafka Core Concepts
@@ -190,7 +193,7 @@ ___
 28. props.put(StreamsConfig.APPLICATION_ID_CONFIG, "order-service");
 29. props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
 30. 위 설정을 통해 Kafka Streams에서 Exactly-Once를 보장
-31. Exactly-Once Semantics (EOS), Read-Process-Write 패턴의 트랜잭션 이라는것 이 있음.
+31. Exactly-Once Semantics (EOS), Read-Process-Write 패턴의 트랜잭션 이라는것 이 있음. EOS는 Idempotent Producer + Transactional API 조합으로 달성.
 32. Topic에서 메시지 읽기 → 처리 로직(집계/통계) → 다른 Topic에 쓰기 → Consumer offset 커밋, 이 전체 과정을 하나의 트랜잭션으로 묶음.
 33. 중간에 장애 발생 시 전체가 롤백되어 메시지가 정확히 한 번만 처리되고, 중복 결과 생성을 방지함.
 34. 위와 같은 EOS를 Kafka Streams에선 EXACTLY_ONCE_V2 설정만으로 간단하게 자동 처리됨.
@@ -203,6 +206,10 @@ ___
 41. log.retention.hours : 로그 보관 기간 (기본 168시간 = 7일).  이 시간을 초과한 세그먼트 삭제. 
 42. log.retention.bytes : 파티션당 최대 로그 크기 (기본 -1 = 무제한). 이 크기를 초과하면 가장 오래된 세그먼트부터 삭제.
 43. log.segment.bytes : log 세그먼크 파일의 최대 크기를 지정, 이 크기에 도달하면 새로운 세그먼트 파일로 전환
+44. preferred leader, 각 파티션은 복제본들이 저장될 브로커 목록을 갖고 있음. 이 브로커 목록(replicas) 리스트의 0번 인덱스 브로커.
+45. 토픽의 파티션 리더들은 여러 브로커에 균등하게 분산되어 있음. 즉 각각의 브로커가 비슷한 수의 파티션 리더를 담당.
+46. 시간이 지남에 따라(브로커 에러등) 리더 분산이 불균형해지면, 주기적으로 파티션의 리더를 preferred leader로 되돌림.
+47. auto.leader.rebalance.enable = true 설정으로 자동 리밸런싱 가능.
 
 
 ## Kafka Configuration
@@ -232,6 +239,7 @@ ___
 23. process.roles (KRaft 역할)
 24. 반면 동적 update가능한 설정들은 Kafka 문서의 "Dynamic Update Mode" 컬럼을 확인하면 알 수 있음
 25. MirrorMaker 2.0을 이용하여 지리적으로 먼 클러스터로 데이터를 복제하는 것은 데이터 가용성을 보장
+26. num.network.threads : 클라이언트(Producer/Consumer)의 네트워크 요청을 받고 응답을 보내는 스레드. 'server.properties' 내부.
 
 
 ## Kafka Setup
@@ -331,8 +339,8 @@ ___
 63 .process-latency : 레코드 하나 처리 시간
 64. commit-rate : 초당 커밋 횟수
 65. commit-latency : 커밋 작업에 걸리는 시간
-66. props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-67. props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+66. props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+67. props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 68. Key는 String으로 직렬화/역직렬화 Value도 String으로 직렬화/역직렬화 별도로 지정하지 않으면 이 설정이 자동 적용
 69. Kafka Streams에서의 에러처리 전략
 70. Fail-fast : 기본동작. 에러 발생시 애플리케이션 즉시 중단. deserialization 에러, processing 에러 등에서 발생할 수 있음
@@ -356,28 +364,29 @@ ___
 2. 독립 실행형 서버로 별도 실행하고, 클라이언트는 라이브러리를 통해 스키마를 자동으로 등록/조회. 메시지에는 스키마 ID만 포함되어 용량 절약
 3. schema-registry-start /etc/schema-registry/schema-registry.properties로 실행
 4. props.put("schema.registry.url", "http://localhost:8081"); 로 등록해줘야함. 
-5. Producer/Consumer, Kafka Connect, Kafka Streams, ksqlDB 등 Kafka와 데이터를 주고받는 모든 컴포넌트에서 사용 가능
-6. 스키마 중앙 저장 및 버전 관리, 스키마 등록 및 검증, 조회 및 역직렬화, 호환선 검증 등.
-7. 호환성 체크를 켜두면 Schema Registry에서 호환성모드(Forward, Backward, Full, None)에 따라서 막아줌. 
-8. 스키마 호환성 체크 = 무중단 배포를 위한 안전장치
-9. 무중단 배포를 위해선? Consumer 혹은 Producer 둘중에 뭐부터 점진적으로 업그레이드 해야할까?
-10. Consumer 먼저? = Backward , Producer 먼저? = Forward 각각 개념이 나옴.
-11. Compatibility는 Schema Registry에 새 스키마를 등록할 때 검증하는 규칙.
-12. ex) Backward로 모드를 설정 -> V2 스키마를 등록하려고 시도 -> Schema Registry에서 직접 Backward 호환성 체크
-13. V2로 V1을 읽을 수 있나? (Backward Compatibility(후방))
-14. V2에 필드 추가 : 기본값(default) 있으면 통과
-15. V2에서 기존 필드 삭제 : 그냥 항상 통과, V2에서 그냥 무시해버리면 됨
-16. 필드 타입 , 필드 이름 변경은 그냥 모두 실패.
-17. 체크 통과하면 -> V2 스키마 등록 성공 -> Consumer를 먼저 V2로 전환하는 배포 전략
-18. ex) Forward로 모드를 설정 -> V2 스키마를 등록하려고 시도 -> Schema Registry에서 직접 Forward 호환성 체크
-19. V1으로 V2를 읽을 수 있나? (Forward Compatibility(전방))
-20. V2에 필드 추가 : 그냥 항상 통과, V1 Consumer가 그냥 V2의 새필드를 무시하면 됨
-21. V2에서 기존 필드 삭제 : V1에 있던 필드가 기본값(default)를 가지고 있으면 통과
-22. 필드 타입 , 필드 이름 변경은 그냥 모두 실패.
-23. 체크 통과하면 -> V2 스키마 등록 성공 -> Producer를 먼저 V2로 전환하는 배포 전략
-24. Full Compatibility(전체 호환성) : Backward + Forward 둘 다 만족. 가장 제약이 많지만 가장 안전. 기본값 있는 필드 추가/삭제만 가능.
-25. None : 호황성 체크 안함. 아무 스키마나 막 등록.
-26. 스키마 호환성 파괴(Breaking Compatibility)는 스키마를 잘못 변경하여 이전버전과 최신 버전이 서로의 데이터를 읽을 수 없게 되는 상황을 의미.
+5. 모든 schema information은 카프카 클러스터 내부의 _schemas 토픽에 저장함.
+6. Producer/Consumer, Kafka Connect, Kafka Streams, ksqlDB 등 Kafka와 데이터를 주고받는 모든 컴포넌트에서 사용 가능
+7스키마 중앙 저장 및 버전 관리, 스키마 등록 및 검증, 조회 및 역직렬화, 호환선 검증 등.
+8호환성 체크를 켜두면 Schema Registry에서 호환성모드(Forward, Backward, Full, None)에 따라서 막아줌. 
+9스키마 호환성 체크 = 무중단 배포를 위한 안전장치
+10. 무중단 배포를 위해선? Consumer 혹은 Producer 둘중에 뭐부터 점진적으로 업그레이드 해야할까?
+11. Consumer 먼저? = Backward , Producer 먼저? = Forward 각각 개념이 나옴.
+12. Compatibility는 Schema Registry에 새 스키마를 등록할 때 검증하는 규칙.
+13. ex) Backward로 모드를 설정 -> V2 스키마를 등록하려고 시도 -> Schema Registry에서 직접 Backward 호환성 체크
+14. V2로 V1을 읽을 수 있나? (Backward Compatibility(후방))
+15. V2에 필드 추가 : 기본값(default) 있으면 통과
+16. V2에서 기존 필드 삭제 : 그냥 항상 통과, V2에서 그냥 무시해버리면 됨
+17. 필드 타입 , 필드 이름 변경은 그냥 모두 실패.
+18. 체크 통과하면 -> V2 스키마 등록 성공 -> Consumer를 먼저 V2로 전환하는 배포 전략
+19. ex) Forward로 모드를 설정 -> V2 스키마를 등록하려고 시도 -> Schema Registry에서 직접 Forward 호환성 체크
+20. V1으로 V2를 읽을 수 있나? (Forward Compatibility(전방))
+21. V2에 필드 추가 : 그냥 항상 통과, V1 Consumer가 그냥 V2의 새필드를 무시하면 됨
+22. V2에서 기존 필드 삭제 : V1에 있던 필드가 기본값(default)를 가지고 있으면 통과
+23. 필드 타입 , 필드 이름 변경은 그냥 모두 실패.
+24. 체크 통과하면 -> V2 스키마 등록 성공 -> Producer를 먼저 V2로 전환하는 배포 전략
+25. Full Compatibility(전체 호환성) : Backward + Forward 둘 다 만족. 가장 제약이 많지만 가장 안전. 기본값 있는 필드 추가/삭제만 가능.
+26. None : 호황성 체크 안함. 아무 스키마나 막 등록.
+27. 스키마 호환성 파괴(Breaking Compatibility)는 스키마를 잘못 변경하여 이전버전과 최신 버전이 서로의 데이터를 읽을 수 없게 되는 상황을 의미.
    
 
 ## Confluent REST Proxy
@@ -414,6 +423,8 @@ ___
 14. DLQ : Dead Letter Queue. 처리 실패한 메시지를 별도의 토픽에 저장하여 메시지를 안전하게 보관하고 나중에 재처리
 15. {"errors.tolerance": "all","errors.deadletterqueue.topic.name": "my-dlq"} 이런식으로 설정만 하면 DLQ가 작동하도록 기능이 내장돼있음.
 16. Exponential Backoff : 지수백오프란 1초 후 재시도, 2초후 재시도 ,4 초후 재시도 .....60초후 재시도 이런식으로 시간제한을 두면서 재시도 하여 시스템 회복 시간 및 부하를 줄이는 시도 방법
+17. Standalone Mode : Connector 설정을 실행 시점에 파일로 전달, 한 프로세스에서 모두 실행, 변경하려면 프로세스 재시작 필요
+18. Distributed Mode : Connector 설정을 REST API로 동적 추가, 여러 프로세스가 Cluster 구성, 변경해도 재시작 불필요, 설정은 Kafka Topic에 저장되어 모든 Worker가 공유
 
 
 ## Kafka KSQL
@@ -446,6 +457,11 @@ ___
 10. Avro Logical Type이란 기본 타입을(int, long, string 등) 확장하여 소수점, 날짜와 같은 데이터를 정확하게 표현하기 위한것.
 11. decimal(소수점), date(날짜), timestamp(시간) 등
 12. Apache Avro 공식 스펙에 따르면 논리 타입은 하이픈(-)으로 구분 (timestamp-millis, timestamp-micros, time-millis, local-timestamp-millis)
+13. 필드 이름을 바꿀 때 aliases key에 이전 필드이름도 넣어서 인식하도록 하는게 Best Practice
+14. Primary Key는 반드시 제공되어야 하고 기본값은 없어야 함.
+15. 새 필드를 추가할 때 항상 기본값을 제공해서 이전 데이터와 호환 되도록 함.
+16. JSON으로 정의된 스키마를 통해 스키마 진화를 강력하게 지원하여 하위 호환성과 상위 호환성을 모두 보장하는것이 특징.
+17. 언어 지원에 따라 사용이 제한될 수 있고, 바이너리 인코딩 형식이기 때문에 데이터를 읽고 쓰려면 도구가 필요.
 
 
 ## Kafka Testing
